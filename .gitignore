@@ -1,0 +1,35 @@
+# Backend branch isolates backend service
+backend/
+
+node_modules/
+.venv/
+venv/
+env/
+
+# Build outputs
+dist/
+dist-ssr/
+build/
+*.egg-info/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Environment variables
+.env
+*.env
+!.env.example
+
+# Large model weights
+*.pth
+*.pt
+*.ckpt
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
