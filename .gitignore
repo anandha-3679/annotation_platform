@@ -1,35 +1,28 @@
-# Backend branch isolates backend service
-backend/
-
-node_modules/
-.venv/
-venv/
-env/
-
-# Build outputs
-dist/
-dist-ssr/
-build/
-*.egg-info/
-
-# Python cache
+# Python
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
+.Python
 
-# Environment variables
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Environment variables — NEVER commit these
 .env
 *.env
-!.env.example
 
-# Large model weights
-*.pth
-*.pt
-*.ckpt
+# Model checkpoints — can be large
+models/*.pth
+models/*.pt
+models/*.ckpt
 
-# IDE & OS
-.vscode/
+# IDE
 .idea/
+.vscode/
+
+# OS
 .DS_Store
 Thumbs.db
