@@ -1,0 +1,23 @@
+﻿# Token-Efficient Agent Development Rules
+
+## 1. Unified Diffs Only
+- When suggesting or presenting code modifications, output ONLY unified diff blocks (```diff) showing the exact lines added or removed.
+- Never output full-file rewrites or entire files unless creating an entirely net-new file.
+
+## 2. Zero Conversational Preamble
+- Do not output introductory greetings, conversational fluff, or redundant restatements of the user prompt.
+- Begin immediately with the solution, commands, or diffs. End promptly once complete.
+
+## 3. Language & Framework Standards
+- **Python (FastAPI Backend)**:
+  - Enforce PEP8 conventions strictly.
+  - Mandate that all test commands execute quietly with `pytest -q`.
+  - Enforce quiet ruff checks: `.\backend\.venv\Scripts\ruff.exe check --quiet`.
+- **JS/TS (React Frontend)**:
+  - Enforce strict functional component boundaries and modular hooks.
+  - Enforce quiet test execution (`vitest run --reporter=basic` or `npm test -- --silent`).
+  - Run linting in quiet mode (`npm run lint -- --quiet` or `oxlint`).
+
+## 4. Quiet Test & Tool Execution
+- Always invoke test runners and linters with quiet / minimal output flags to avoid flooding context.
+- If a command produces more than 50 lines of output, immediately summarize or truncate to only failing assertions and stack traces.

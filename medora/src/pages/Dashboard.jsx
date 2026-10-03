@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Sparkles,
@@ -14,13 +14,66 @@ import {
   Clock,
   Layers,
   FileText,
+  X,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { getProjects, uploadImage } from '../services/api';
 
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+
+  const loadProjects = async () => {
+    try {
+      const data = await getProjects();
+      setProjects(data);
+      if (data.length > 0 && !selectedProjectId) {
+        setSelectedProjectId(data[0].id);
+      }
+    } catch (err) {
+      console.warn('Could not load projects:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadProjects();
+  }, []);
+
+  const handleUploadSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedProjectId) {
+      setUploadError('Please select a target cohort.');
+      return;
+    }
+    if (!selectedFile) {
+      setUploadError('Please select a chest X-ray file.');
+      return;
+    }
+
+    setUploading(true);
+    setUploadError('');
+    try {
+      const result = await uploadImage(selectedProjectId, selectedFile);
+      setShowUploadModal(false);
+      setSelectedFile(null);
+      await loadProjects();
+      // Navigate directly into project studies
+      navigate(`/project/${selectedProjectId}`);
+    } catch (err) {
+      setUploadError(err.message || 'Upload failed.');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const quickActions = [
     {
@@ -42,7 +95,7 @@ export default function Dashboard() {
     {
       id: 'ai-review',
       title: 'AI Queue',
-      subtitle: '19 Urgent Cases',
+      subtitle: 'Priority Cases',
       icon: BrainCircuit,
       gradient: 'linear-gradient(135deg, #db2777 0%, #f472b6 100%)',
       action: () => navigate('/projects?filter=needs_review'),
@@ -65,64 +118,21 @@ export default function Dashboard() {
     },
   ];
 
-  const recentStudies = [
-    {
-      id: 'proj-1',
-      title: 'ICU Portable Chest X-Rays',
-      description: 'Acute respiratory distress syndrome & pleural fluid monitoring',
-      totalImages: 48,
-      verifiedCount: 38,
-      aiConfidence: '88.4%',
-      tag: 'Cardiomegaly',
-      tagColor: '#ef4444',
-      thumb: 'https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&w=400&q=80',
-    },
-    {
-      id: 'proj-2',
-      title: 'Pneumothorax Rapid Screen Cohort',
-      description: 'Tension pneumothorax line segmentation and lung border trace',
-      totalImages: 24,
-      verifiedCount: 16,
-      aiConfidence: '76.2%',
-      tag: 'Pneumothorax',
-      tagColor: '#f59e0b',
-      thumb: 'https://images.unsplash.com/photo-1530497610245-94d3c16cda28?auto=format&fit=crop&w=400&q=80',
-    },
-    {
-      id: 'proj-3',
-      title: 'Bilateral Infiltration & Pneumonia',
-      description: 'Ground-glass opacity multi-region mask refinement',
-      totalImages: 60,
-      verifiedCount: 52,
-      aiConfidence: '91.8%',
-      tag: 'Infiltration',
-      tagColor: '#8b5cf6',
-      thumb: 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?auto=format&fit=crop&w=400&q=80',
-    },
-    {
-      id: 'proj-4',
-      title: 'Cardiomegaly Heart Silhouette Trial',
-      description: 'Cardiothoracic ratio boundary measurement',
-      totalImages: 35,
-      verifiedCount: 35,
-      aiConfidence: '94.1%',
-      tag: 'Completed',
-      tagColor: '#10b981',
-      thumb: 'https://images.unsplash.com/photo-1579684385127-1ef15d508118?auto=format&fit=crop&w=400&q=80',
-    },
-  ];
+  const totalStudies = projects.reduce((acc, p) => acc + (p.total_images || 0), 0);
+  const totalAnnotated = projects.reduce((acc, p) => acc + (p.annotated_images || 0), 0);
 
   return (
-    <div className="dashboard-container">
-      {/* 1. Canva Hero Greeting Banner */}
-      <div className="canva-hero-banner">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px', color: '#a78bfa', marginBottom: '8px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+      {/* 1. Hero Greeting Banner */}
+      <div className="hero-banner">
+        <div className="hero-tag">
+          <Sparkles size={14} />
           <span>Clinical Radiology Workstation</span>
           <span>•</span>
           <span>Active Learning Pipeline Active</span>
         </div>
         <h1 style={{ fontSize: '32px', fontWeight: '800', letterSpacing: '-0.5px' }}>
-          Welcome to MEDORA, {user?.user_metadata?.full_name || 'Dr. Specialist'}{' '}
+          Welcome to MEDORA, {user?.user_metadata?.full_name || user?.name || 'Dr. Specialist'}{' '}
           <span className="hero-sparkle">✦</span>
         </h1>
         <p className="hero-subtitle">
@@ -140,12 +150,26 @@ export default function Dashboard() {
             <span>Open Annotation Studio</span>
           </button>
           <button
-            className="btn"
+            className="btn btn-secondary"
+            onClick={() => setShowUploadModal(true)}
+            style={{
+              padding: '10px 20px',
+              fontSize: '14px',
+              background: 'rgba(255, 255, 255, 0.15)',
+              color: '#ffffff',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+            }}
+          >
+            <UploadCloud size={16} />
+            <span>Upload New Study</span>
+          </button>
+          <button
+            className="btn btn-secondary"
             onClick={() => navigate('/active-learning')}
             style={{
               padding: '10px 20px',
               fontSize: '14px',
-              background: 'rgba(255, 255, 255, 0.12)',
+              background: 'rgba(255, 255, 255, 0.15)',
               color: '#ffffff',
               border: '1px solid rgba(255, 255, 255, 0.2)',
             }}
@@ -220,141 +244,216 @@ export default function Dashboard() {
             <TrendingUp size={24} />
           </div>
           <div>
-            <div style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-primary)' }}>
-              Active Learning Cycle #4 Active
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '16px', fontWeight: '700' }}>Active Learning Cycle #4 Active</span>
+              <span className="badge badge-success">Model Dice 0.892 (+15%)</span>
             </div>
-            <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-              Model Mean Dice Score increased from <strong style={{ color: 'var(--color-success)' }}>0.824 → 0.892</strong> following your last 32 corrected masks.
-            </div>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              {totalAnnotated} of {totalStudies} radiographs reviewed by radiologists. Corrected segmentations directly improve next fine-tuning weights.
+            </p>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Uncertainty Pool</div>
-            <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--primary-700)' }}>19 Urgent Reviews</div>
-          </div>
-          <button
-            className="btn btn-secondary"
-            onClick={() => navigate('/active-learning')}
-            style={{ fontSize: '13px' }}
-          >
-            <span>Inspect Retrain Metrics</span>
-            <ArrowRight size={14} />
-          </button>
-        </div>
+        <button
+          className="btn btn-secondary"
+          onClick={() => navigate('/active-learning')}
+          style={{ fontSize: '13px', padding: '8px 16px' }}
+        >
+          <span>View Uncertainty Queue</span>
+          <ArrowRight size={14} />
+        </button>
       </div>
 
-      {/* 4. Recent Studies & Projects Grid */}
+      {/* 4. Active Cohorts & Studies Section */}
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <div>
-            <h2 style={{ fontSize: '18px', fontWeight: '800' }}>Active Cohorts & Studies</h2>
-            <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-              Select a study to launch the Canva annotation studio
-            </div>
+            <h2 style={{ fontSize: '18px', fontWeight: '800' }}>Clinical Cohorts & Datasets</h2>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+              Managed imaging cohorts synchronized with PostgreSQL & Supabase Storage
+            </p>
           </div>
           <button
             className="btn btn-secondary"
             onClick={() => navigate('/projects')}
             style={{ fontSize: '13px' }}
           >
-            <span>View All Cohorts</span>
+            <span>View All ({projects.length})</span>
             <ArrowRight size={14} />
           </button>
         </div>
 
-        <div className="projects-grid">
-          {recentStudies.map((study) => {
-            const progress = Math.round((study.verifiedCount / study.totalImages) * 100);
-            return (
-              <div
-                key={study.id}
-                className="project-card"
-                onClick={() => navigate(`/project/${study.id}`)}
-              >
-                <div className="project-card-thumb">
-                  <img src={study.thumb} alt={study.title} />
-                  <span
-                    className="card-badge"
-                    style={{ borderLeft: `3px solid ${study.tagColor}` }}
-                  >
-                    {study.tag}
-                  </span>
-                </div>
-                <div className="project-card-body">
-                  <div className="project-card-title">{study.title}</div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                    {study.description}
-                  </div>
+        {projects.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px', background: '#ffffff', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border-light)' }}>
+            <FolderPlus size={40} color="var(--primary-400)" style={{ margin: '0 auto 12px' }} />
+            <h3 style={{ fontSize: '16px', fontWeight: '700' }}>No cohorts found</h3>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Create your first clinical cohort to begin uploading X-rays.</p>
+          </div>
+        ) : (
+          <div className="card-grid">
+            {projects.map((proj) => {
+              const total = proj.total_images || 0;
+              const annotated = proj.annotated_images || 0;
+              const progress = total > 0 ? Math.round((annotated / total) * 100) : 0;
 
-                  <div className="progress-bar-container">
-                    <div
-                      className="progress-bar-fill"
-                      style={{ width: `${progress}%` }}
+              return (
+                <div
+                  key={proj.id}
+                  className="study-card"
+                  onClick={() => navigate(`/project/${proj.id}`)}
+                >
+                  <div className="study-card-thumb">
+                    <img
+                      src="/sample-xray.png"
+                      alt={proj.name}
+                      onError={(e) => {
+                        e.target.src = 'https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&w=400&q=80';
+                      }}
                     />
+                    <div className="study-card-tag" style={{ background: '#7c3aed' }}>
+                      {proj.status.toUpperCase()}
+                    </div>
                   </div>
 
-                  <div className="project-card-meta">
-                    <span>{study.verifiedCount} / {study.totalImages} Verified</span>
-                    <span style={{ fontWeight: '700', color: 'var(--primary-600)' }}>
-                      {progress}%
-                    </span>
+                  <div className="study-card-body">
+                    <div className="study-card-title">{proj.name}</div>
+                    <div className="study-card-desc">{proj.description || 'Clinical cohort for radiologist mask review'}</div>
+
+                    <div style={{ marginTop: 'auto', paddingTop: '12px' }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          fontSize: '12px',
+                          color: 'var(--text-secondary)',
+                          marginBottom: '6px',
+                        }}
+                      >
+                        <span>Verified: {annotated} / {total}</span>
+                        <span>{progress}%</span>
+                      </div>
+                      <div className="study-progress-bar">
+                        <div
+                          className="study-progress-fill"
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="study-card-footer">
+                      <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                        {total} Studies
+                      </span>
+                      <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--primary-600)' }}>
+                        Open Cohort →
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      {/* Simple Upload Modal */}
+      {/* Upload Study Modal */}
       {showUploadModal && (
         <div className="modal-overlay" onClick={() => setShowUploadModal(false)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
             <div className="modal-header">
               <h3 style={{ fontSize: '16px', fontWeight: '700' }}>Upload Chest Radiograph</h3>
               <button
                 className="btn btn-ghost btn-icon"
                 onClick={() => setShowUploadModal(false)}
               >
-                ✕
+                <X size={16} />
               </button>
             </div>
-            <div className="modal-body" style={{ textAlign: 'center' }}>
-              <div
-                style={{
-                  border: '2px dashed var(--border-light)',
-                  borderRadius: 'var(--radius-md)',
-                  padding: '36px 20px',
-                  background: 'var(--bg-app)',
-                  cursor: 'pointer',
-                }}
-              >
-                <UploadCloud size={44} color="var(--primary-600)" style={{ margin: '0 auto 12px' }} />
-                <div style={{ fontSize: '15px', fontWeight: '700' }}>Drag & Drop DICOM or PNG images</div>
-                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                  Supports .dcm, .png, .jpg up to 50MB per file
+            <form onSubmit={handleUploadSubmit}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {uploadError && (
+                  <div
+                    style={{
+                      padding: '10px 14px',
+                      background: 'var(--color-danger-bg)',
+                      color: 'var(--color-danger)',
+                      borderRadius: 'var(--radius-sm)',
+                      fontSize: '13px',
+                    }}
+                  >
+                    {uploadError}
+                  </div>
+                )}
+
+                <div className="form-group">
+                  <label className="form-label">Target Cohort</label>
+                  <select
+                    className="form-input"
+                    value={selectedProjectId}
+                    onChange={(e) => setSelectedProjectId(e.target.value)}
+                    required
+                  >
+                    {projects.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} ({p.total_images || 0} studies)
+                      </option>
+                    ))}
+                  </select>
                 </div>
-                <button className="btn btn-primary" style={{ marginTop: '16px' }}>
-                  Browse Files
+
+                <div className="form-group">
+                  <label className="form-label">Select Radiograph File (DICOM, PNG, JPEG)</label>
+                  <div
+                    style={{
+                      border: '2px dashed var(--border-light)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '24px 20px',
+                      background: 'var(--bg-app)',
+                      textAlign: 'center',
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => document.getElementById('dashboard-file-input')?.click()}
+                  >
+                    <UploadCloud size={36} color="var(--primary-600)" style={{ margin: '0 auto 8px' }} />
+                    <div style={{ fontSize: '14px', fontWeight: '700' }}>
+                      {selectedFile ? selectedFile.name : 'Click to select chest X-ray'}
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                      {selectedFile ? `${Math.round(selectedFile.size / 1024)} KB` : 'Supports PNG, JPG, DCM up to 50MB'}
+                    </div>
+                    <input
+                      id="dashboard-file-input"
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,.dcm"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        if (e.target.files?.[0]) {
+                          setSelectedFile(e.target.files[0]);
+                          setUploadError('');
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowUploadModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={uploading || !selectedFile}
+                  className="btn btn-gradient"
+                >
+                  {uploading ? 'Uploading to Storage...' : 'Upload & View Studies'}
                 </button>
               </div>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowUploadModal(false)}>
-                Cancel
-              </button>
-              <button
-                className="btn btn-gradient"
-                onClick={() => {
-                  setShowUploadModal(false);
-                  navigate('/annotate');
-                }}
-              >
-                Upload & Annotate
-              </button>
-            </div>
+            </form>
           </div>
         </div>
       )}

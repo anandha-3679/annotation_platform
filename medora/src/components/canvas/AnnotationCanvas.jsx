@@ -30,8 +30,8 @@ export function AnnotationCanvas({
   stageWidth = 650,
   stageHeight = 650,
 }) {
-  const [image] = useImage(imageUrl);
-  const [aiMaskImage] = useImage(aiMaskUrl);
+  const [image] = useImage(imageUrl, 'anonymous');
+  const [aiMaskImage] = useImage(aiMaskUrl, 'anonymous');
 
   const onControlsReadyRef = useRef(onControlsReady);
   useEffect(() => {
@@ -175,6 +175,7 @@ export function AnnotationCanvas({
   }, []);
 
   // Export
+  // Export
   const exportMask = useCallback(() => {
     const stage = stageRef.current;
     const maskLayer = maskLayerRef.current;
@@ -182,9 +183,11 @@ export function AnnotationCanvas({
 
     const currentScale = stage.scaleX();
     const currentPos = { x: stage.x(), y: stage.y() };
+    const prevOpacity = maskLayer.opacity();
 
     stage.scale({ x: 1, y: 1 });
     stage.position({ x: 0, y: 0 });
+    maskLayer.opacity(1);
     stage.batchDraw();
 
     const dataUrl = maskLayer.toDataURL({
@@ -195,6 +198,7 @@ export function AnnotationCanvas({
 
     stage.scale({ x: currentScale, y: currentScale });
     stage.position(currentPos);
+    maskLayer.opacity(prevOpacity);
     stage.batchDraw();
 
     const a = document.createElement('a');
@@ -206,8 +210,36 @@ export function AnnotationCanvas({
     return dataUrl;
   }, [stageWidth, stageHeight, onSave]);
 
+  const getMaskDataUrl = useCallback(() => {
+    const stage = stageRef.current;
+    const maskLayer = maskLayerRef.current;
+    if (!stage || !maskLayer) return null;
+
+    const currentScale = stage.scaleX();
+    const currentPos = { x: stage.x(), y: stage.y() };
+    const prevOpacity = maskLayer.opacity();
+
+    stage.scale({ x: 1, y: 1 });
+    stage.position({ x: 0, y: 0 });
+    maskLayer.opacity(1);
+    stage.batchDraw();
+
+    const dataUrl = maskLayer.toDataURL({
+      width: stageWidth,
+      height: stageHeight,
+      pixelRatio: 1,
+    });
+
+    stage.scale({ x: currentScale, y: currentScale });
+    stage.position(currentPos);
+    maskLayer.opacity(prevOpacity);
+    stage.batchDraw();
+
+    return dataUrl;
+  }, [stageWidth, stageHeight]);
+
   const controlsRef = useRef({});
-  controlsRef.current = { undo, redo, resetView, zoomIn, zoomOut, exportMask };
+  controlsRef.current = { undo, redo, resetView, zoomIn, zoomOut, exportMask, getMaskDataUrl };
 
   useEffect(() => {
     onControlsReadyRef.current?.({
@@ -217,6 +249,7 @@ export function AnnotationCanvas({
       zoomIn: (...args) => controlsRef.current.zoomIn(...args),
       zoomOut: (...args) => controlsRef.current.zoomOut(...args),
       exportMask: (...args) => controlsRef.current.exportMask(...args),
+      getMaskDataUrl: (...args) => controlsRef.current.getMaskDataUrl(...args),
     });
   }, []);
 
@@ -275,19 +308,16 @@ export function AnnotationCanvas({
           )}
         </Layer>
 
-        {/* Layer 2 — AI predicted mask */}
-        {aiMaskImage && showAIMask && (
-          <Layer listening={false} opacity={aiMaskOpacity}>
+        {/* Layer 2 — Unified Mask Layer (AI Mask + Doctor Edits & Erasures) */}
+        <Layer ref={maskLayerRef} opacity={aiMaskOpacity}>
+          {aiMaskImage && showAIMask && (
             <KonvaImage
               image={aiMaskImage}
               width={stageWidth}
               height={stageHeight}
+              listening={false}
             />
-          </Layer>
-        )}
-
-        {/* Layer 3 — Doctor Correction Layer */}
-        <Layer ref={maskLayerRef}>
+          )}
           {lines.map((line) => (
             <Line
               key={line.id}

@@ -27,10 +27,18 @@ import {
   Share2,
   Plus,
   Trash2,
+  Loader2,
 } from 'lucide-react';
 import { AnnotationCanvas } from '../components/canvas/AnnotationCanvas';
 import { TOOLS, COLOR_PALETTES } from '../components/canvas/constants';
 import { getMockAIPrediction } from '../services/mockAI';
+import {
+  getImageDetail,
+  getProjects,
+  getProjectImages,
+  getAnnotation,
+  saveAnnotation,
+} from '../services/api';
 
 // Default medical X-ray asset
 const DEFAULT_XRAY = 'https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&w=1000&q=85';
@@ -38,13 +46,18 @@ const DEFAULT_XRAY = 'https://images.unsplash.com/photo-1516549655169-df83a07745
 export default function AnnotationWorkspace() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const imageId = searchParams.get('imageId') || 'CXR-2026-9041';
+  const queryImageId = searchParams.get('imageId');
 
   // Active Tool & Canvas State
   const [activeTool, setActiveTool] = useState(TOOLS.BRUSH);
   const [brushSize, setBrushSize] = useState(16);
   const [brushColor, setBrushColor] = useState(COLOR_PALETTES[0].value);
   const [activeDrawer, setActiveDrawer] = useState('tools'); // 'tools' | 'ai' | 'layers' | 'adjust' | null
+
+  // Backend image & save state
+  const [imageRecord, setImageRecord] = useState(null);
+  const [currentImageUrl, setCurrentImageUrl] = useState(DEFAULT_XRAY);
+  const [isSaving, setIsSaving] = useState(false);
 
   // AI Inference State
   const [aiLoading, setAiLoading] = useState(true);
@@ -68,39 +81,142 @@ export default function AnnotationWorkspace() {
   const canvasControls = useRef(null);
 
   // Status message
-  const [toastMsg, setToastMsg] = useState('AI Mask Generated ✦');
+  const [toastMsg, setToastMsg] = useState('Connecting to Medical Imaging Service...');
 
-  // Load AI Prediction on Mount
+  // Load Real Image & Annotation or Fallback on Mount
   useEffect(() => {
     let mounted = true;
     setAiLoading(true);
-    getMockAIPrediction(650, 650)
-      .then((pred) => {
+
+    async function loadWorkspaceData() {
+      try {
+        let loadedImage = null;
+
+        if (queryImageId) {
+          try {
+            loadedImage = await getImageDetail(queryImageId);
+          } catch (e) {
+            console.warn('Could not load image detail by ID:', e);
+          }
+        }
+
+        // If no image loaded by direct ID, check active projects
+        if (!loadedImage) {
+          try {
+            const projects = await getProjects();
+            if (projects && projects.length > 0) {
+              for (const proj of projects) {
+                const projectImages = await getProjectImages(proj.id);
+                if (projectImages && projectImages.length > 0) {
+                  loadedImage = projectImages[0];
+                  break;
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('Could not load project images fallback:', e);
+          }
+        }
+
+        if (!mounted) return;
+
+        if (loadedImage) {
+          setImageRecord(loadedImage);
+          if (loadedImage.url) {
+            setCurrentImageUrl(loadedImage.url);
+          }
+          if (loadedImage.status === 'done') {
+            setWorkflowStatus('accepted');
+          }
+
+          // Check if an existing annotation exists in backend
+          try {
+            const existingAnn = await getAnnotation(loadedImage.id);
+            if (existingAnn) {
+              if (existingAnn.mask_url) {
+                setAiMaskUrl(existingAnn.mask_url);
+              }
+              if (existingAnn.findings_json && existingAnn.findings_json.length > 0) {
+                setFindings(existingAnn.findings_json);
+              }
+              if (existingAnn.dice_score) {
+                setAiConfidence(existingAnn.dice_score);
+                setAiUncertainty(Math.max(0.05, +(1 - existingAnn.dice_score).toFixed(2)));
+              }
+              if (existingAnn.source === 'human_edited' || loadedImage.status === 'done') {
+                setWorkflowStatus('accepted');
+              }
+              setToastMsg('Saved annotation retrieved from database ✦');
+              setAiLoading(false);
+              return;
+            }
+          } catch (e) {
+            console.warn('Could not check existing annotation:', e);
+          }
+        }
+
+        // If no saved annotation was found, run mock AI prediction to give initial masks & findings
+        const pred = await getMockAIPrediction(650, 650);
         if (!mounted) return;
         setAiMaskUrl(pred.maskDataUrl);
         setAiConfidence(pred.confidence);
         setAiUncertainty(pred.uncertainty);
         setFindings(pred.findings);
-        setAiLoading(false);
-        setToastMsg('AI Segmentation & Findings loaded ✦');
-      })
-      .catch(() => {
+        setToastMsg('AI Segmentation & Clinical Findings loaded ✦');
+      } catch (err) {
+        console.error('Error initializing workspace:', err);
+        setToastMsg('Ready for manual annotation ✦');
+      } finally {
         if (mounted) setAiLoading(false);
-      });
+      }
+    }
+
+    loadWorkspaceData();
 
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [queryImageId]);
 
   const handleControlsReady = (controls) => {
     canvasControls.current = controls;
   };
 
-  const handleAcceptAI = () => {
-    setWorkflowStatus('accepted');
-    setToastMsg('AI Mask & Findings Approved! Saved to dataset ✦');
-    setTimeout(() => setToastMsg(''), 4000);
+  const handleSaveAnnotation = async (source = 'human_edited') => {
+    if (isSaving) return;
+    setIsSaving(true);
+    setToastMsg('Processing canvas mask and saving to database...');
+
+    try {
+      // 1. Get base64 mask data URL directly from Konva canvas layer
+      const maskDataUrl = canvasControls.current?.getMaskDataUrl?.() || (source === 'ai_accepted' ? aiMaskUrl : undefined);
+
+      if (imageRecord?.id) {
+        const payload = {
+          image_id: imageRecord.id,
+          mask_data_url: maskDataUrl || undefined,
+          findings_json: findings,
+          source: source,
+          dice_score: aiConfidence,
+        };
+
+        const result = await saveAnnotation(payload);
+        if (result && result.mask_url) {
+          setAiMaskUrl(result.mask_url);
+        }
+        setWorkflowStatus('accepted');
+        setToastMsg('Annotation & Mask saved! Status: DOCTOR VERIFIED ✦');
+      } else {
+        setWorkflowStatus('accepted');
+        setToastMsg('Mask & Findings Approved! Saved locally ✦');
+      }
+    } catch (err) {
+      console.error('Failed to save annotation:', err);
+      setToastMsg(`Save failed: ${err.message || 'Server error'}`);
+    } finally {
+      setIsSaving(false);
+      setTimeout(() => setToastMsg(''), 5000);
+    }
   };
 
   const handleStartEdit = () => {
@@ -158,7 +274,7 @@ export default function AnnotationWorkspace() {
 
           <div className="editor-title-box">
             <div className="editor-title">
-              <span>Patient Study: {imageId}</span>
+              <span>{imageRecord?.original_name || (queryImageId ? `Study: ${queryImageId}` : 'Patient Study: CXR-2026-9041')}</span>
               <span
                 className="editor-status-pill"
                 style={{
@@ -184,7 +300,7 @@ export default function AnnotationWorkspace() {
               </span>
             </div>
             <div style={{ fontSize: '11px', color: '#94a3b8' }}>
-              DICOM PA Erect • Apex Medical Center • {toastMsg || 'Auto-saved to Supabase ✦'}
+              DICOM PA Erect • {imageRecord ? `${imageRecord.width_px || 1024} × ${imageRecord.height_px || 1024}px` : 'Apex Medical Center'} • {toastMsg || 'Auto-saved to database ✦'}
             </div>
           </div>
         </div>
@@ -232,14 +348,25 @@ export default function AnnotationWorkspace() {
 
               <button
                 className="btn btn-success"
-                onClick={handleAcceptAI}
+                onClick={() => handleSaveAnnotation('ai_accepted')}
+                disabled={isSaving}
                 style={{ fontSize: '13px', padding: '6px 14px' }}
               >
-                <Check size={16} />
+                {isSaving ? <Loader2 size={16} className="spin" /> : <Check size={16} />}
                 <span>Accept Mask</span>
               </button>
             </>
           )}
+
+          <button
+            className="btn btn-primary"
+            onClick={() => handleSaveAnnotation('human_edited')}
+            disabled={isSaving}
+            style={{ fontSize: '13px', padding: '6px 14px' }}
+          >
+            {isSaving ? <Loader2 size={15} className="spin" /> : <Save size={15} />}
+            <span>Save Annotation</span>
+          </button>
 
           {workflowStatus === 'accepted' && (
             <button
@@ -502,7 +629,7 @@ export default function AnnotationWorkspace() {
             </div>
           ) : (
             <AnnotationCanvas
-              imageUrl={DEFAULT_XRAY}
+              imageUrl={currentImageUrl}
               tool={activeTool}
               brushSize={brushSize}
               brushColor={brushColor}
@@ -684,11 +811,12 @@ export default function AnnotationWorkspace() {
           <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column', gap: '8px', background: '#ffffff' }}>
             <button
               className="btn btn-primary"
-              onClick={handleAcceptAI}
+              onClick={() => handleSaveAnnotation('human_edited')}
+              disabled={isSaving}
               style={{ width: '100%', padding: '10px' }}
             >
-              <CheckCircle size={16} />
-              <span>Verify & Lock Annotation</span>
+              {isSaving ? <Loader2 size={16} className="spin" /> : <CheckCircle size={16} />}
+              <span>{isSaving ? 'Saving Mask to DB...' : 'Verify & Lock Annotation'}</span>
             </button>
             <button
               className="btn btn-secondary"

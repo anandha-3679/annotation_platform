@@ -33,3 +33,8 @@ __pycache__/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Repomix code maps
+repomix-output.xml
+repo_map.txt
+

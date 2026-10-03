@@ -1,7 +1,7 @@
 # MEDORA — Project State & Resume Guide
 
 > **Last Updated**: October 3, 2026  
-> **Status**: Week 3 Complete | Ready for Week 4 (Supabase Storage & Backend API Sync)  
+> **Status**: Week 4 Complete | Ready for Week 5 (Real PyTorch AI Integration)  
 > **Active Directory**: `c:\Users\Anandha Lakshmi\mini_project`
 
 ---
@@ -88,6 +88,18 @@
   - High uncertainty sampling queue table for priority radiologist review.
   - PyTorch training batch worker trigger.
 - **Verification**: `vite build` passed in 3.17s (0 errors). Browser testing with subagent verified all flows, interactions, and captured screenshots.
+
+### ✅ Week 4: Real Data Layer & End-to-End Persistence (Complete)
+- **FastAPI Endpoints**:
+  - `POST /projects` & `GET /projects`: Cohort CRUD with dynamic image & verified counts. Supports both slash and slashless paths without 307 redirects.
+  - `POST /images/upload` & `GET /images/{project_id}`: Multipart image uploads with PIL metadata extraction and database registration.
+  - `POST /annotations` & `GET /annotations/{image_id}`: Mask saving (with `annotation_id` flush & version snapshots) and reloading.
+- **Frontend Wiring**:
+  - `ProjectPanel.jsx` & `Dashboard.jsx`: Live cohort management, new cohort modal, and study upload modal.
+  - `ProjectPage.jsx`: Filterable radiograph grid with live query param sync (`filter`, `search`).
+  - `AnnotationWorkspace.jsx`: Loads real radiograph from database, restores saved masks and findings, updates case status to `DOCTOR VERIFIED`.
+  - `AnnotationCanvas.jsx`: Unified mask layer (`maskLayerRef`) so the eraser cleanly erases AI masks and manual strokes alike; exports full-opacity mask composite.
+- **Verification**: Verified via one-shot in-process ASGI test `backend/test_week4_flow.py` (all 9 steps passed: login → create cohort → upload image → list images → save mask → retrieve mask → verify image status → verify cohort counts). No background servers left running.
 
 ---
 

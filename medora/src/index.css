@@ -211,6 +211,34 @@ h1, h2, h3, h4, h5, h6 {
   height: 100vh;
   overflow: hidden;
   background-color: var(--bg-app);
+  position: relative;
+}
+
+/* Floating Expand Tab for Collapsed Secondary Panel */
+.panel-expand-floating-btn {
+  position: absolute;
+  left: 64px;
+  top: 14px;
+  z-index: 45;
+  width: 26px;
+  height: 28px;
+  background: #ffffff;
+  border: 1px solid var(--border-light);
+  border-left: none;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--primary-600);
+  box-shadow: 2px 1px 6px rgba(0, 0, 0, 0.08);
+  transition: all var(--transition-fast);
+}
+
+.panel-expand-floating-btn:hover {
+  background: var(--primary-50);
+  color: var(--primary-700);
+  width: 28px;
 }
 
 /* 1. Left Rail (Canva Dark Purple Bar: 64px) */
@@ -464,7 +492,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* Canva Banner */
-.canva-hero-banner {
+.canva-hero-banner,
+.hero-banner {
   background: linear-gradient(135deg, #2e1065 0%, #1e1b4b 50%, #181438 100%);
   border-radius: var(--radius-xl);
   padding: 36px 40px;
@@ -475,7 +504,8 @@ h1, h2, h3, h4, h5, h6 {
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.canva-hero-banner::after {
+.canva-hero-banner::after,
+.hero-banner::after {
   content: '';
   position: absolute;
   top: -50%;
@@ -485,6 +515,21 @@ h1, h2, h3, h4, h5, h6 {
   background: radial-gradient(circle, rgba(124, 58, 237, 0.4) 0%, transparent 70%);
   border-radius: 50%;
   pointer-events: none;
+}
+
+.hero-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 6px 14px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #e0e7ff;
+  margin-bottom: 16px;
+  width: fit-content;
 }
 
 .hero-sparkle {
@@ -555,13 +600,15 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* Project Cards Grid */
-.projects-grid {
+.projects-grid,
+.card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 20px;
 }
 
-.project-card {
+.project-card,
+.study-card {
   background: #ffffff;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-light);
@@ -574,14 +621,16 @@ h1, h2, h3, h4, h5, h6 {
   color: inherit;
 }
 
-.project-card:hover {
+.project-card:hover,
+.study-card:hover {
   transform: translateY(-4px);
   box-shadow: var(--shadow-lg);
   border-color: var(--primary-300);
 }
 
-.project-card-thumb {
-  height: 160px;
+.project-card-thumb,
+.study-card-thumb {
+  height: 180px;
   background: #0f172a;
   position: relative;
   overflow: hidden;
@@ -590,22 +639,25 @@ h1, h2, h3, h4, h5, h6 {
   justify-content: center;
 }
 
-.project-card-thumb img {
+.project-card-thumb img,
+.study-card-thumb img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   transition: transform 0.3s ease;
 }
 
-.project-card:hover .project-card-thumb img {
+.project-card:hover .project-card-thumb img,
+.study-card:hover .study-card-thumb img {
   transform: scale(1.05);
 }
 
-.card-badge {
+.card-badge,
+.study-card-tag {
   position: absolute;
   top: 10px;
   right: 10px;
-  padding: 4px 8px;
+  padding: 4px 10px;
   border-radius: var(--radius-full);
   font-size: 11px;
   font-weight: 700;
@@ -614,17 +666,55 @@ h1, h2, h3, h4, h5, h6 {
   color: #ffffff;
 }
 
-.project-card-body {
+.project-card-body,
+.study-card-body {
   padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  flex: 1;
 }
 
-.project-card-title {
+.project-card-title,
+.study-card-title {
   font-size: 15px;
   font-weight: 700;
   color: var(--text-primary);
+}
+
+.study-card-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.study-progress-bar {
+  width: 100%;
+  height: 6px;
+  background: var(--border-light);
+  border-radius: 9999px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.study-progress-fill {
+  height: 100%;
+  background: var(--primary-600);
+  border-radius: 9999px;
+  transition: width 0.3s ease;
+}
+
+.study-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-light);
 }
 
 .project-card-meta {

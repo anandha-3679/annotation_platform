@@ -14,6 +14,7 @@ export default function TopBar({ onUploadClick }) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchVal, setSearchVal] = React.useState('');
 
   const getBreadcrumbs = () => {
     const parts = location.pathname.split('/').filter(Boolean);
@@ -65,7 +66,14 @@ export default function TopBar({ onUploadClick }) {
         <Search size={16} color="var(--text-muted)" />
         <input
           type="text"
-          placeholder="Search patient ID, DICOM accession, or findings (e.g. pleural effusion)..."
+          placeholder="Search patient ID, DICOM accession, or findings (Press Enter)..."
+          value={searchVal}
+          onChange={(e) => setSearchVal(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              navigate(`/projects?search=${encodeURIComponent(searchVal.trim())}`);
+            }
+          }}
         />
       </div>
 
