@@ -19,6 +19,10 @@ models/*.pth
 models/*.pt
 models/*.ckpt
 
+# Storage uploads
+storage/*
+!storage/raw-images/sample-xray.png
+
 # IDE
 .idea/
 .vscode/
