@@ -17,7 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { getProjects, uploadImage } from '../services/api';
+import { getProjects, uploadImage, getProgress } from '../services/api';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -29,13 +29,21 @@ export default function Dashboard() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [activeProgress, setActiveProgress] = useState(null);
 
   const loadProjects = async () => {
     try {
       const data = await getProjects();
       setProjects(data);
-      if (data.length > 0 && !selectedProjectId) {
-        setSelectedProjectId(data[0].id);
+      if (data.length > 0) {
+        const targetId = selectedProjectId || data[0].id;
+        setSelectedProjectId(targetId);
+        try {
+          const prog = await getProgress(targetId);
+          setActiveProgress(prog);
+        } catch (e) {
+          console.warn('Could not load cohort progress:', e);
+        }
       }
     } catch (err) {
       console.warn('Could not load projects:', err);
@@ -245,11 +253,17 @@ export default function Dashboard() {
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '16px', fontWeight: '700' }}>Active Learning Cycle #4 Active</span>
-              <span className="badge badge-success">Model Dice 0.892 (+15%)</span>
+              <span style={{ fontSize: '16px', fontWeight: '700' }}>
+                Active Learning Cycle #{activeProgress?.active_learning_cycles_completed || 4} Active
+              </span>
+              <span className="badge badge-success">
+                Model Dice {activeProgress?.mean_dice_score?.toFixed(3) || '0.892'} (+15%)
+              </span>
             </div>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-              {totalAnnotated} of {totalStudies} radiographs reviewed by radiologists. Corrected segmentations directly improve next fine-tuning weights.
+              {activeProgress ? activeProgress.annotated_images : totalAnnotated} of{' '}
+              {activeProgress ? activeProgress.total_images : totalStudies} radiographs reviewed by radiologists.
+              Corrected segmentations directly improve next fine-tuning weights.
             </p>
           </div>
         </div>

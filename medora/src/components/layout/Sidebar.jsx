@@ -66,14 +66,14 @@ export default function Sidebar() {
 
       {/* Footer / Profile */}
       <div className="rail-footer">
-        <button
-          className="rail-item"
-          title="Clinical Documentation & Help"
-          style={{ width: '100%', background: 'transparent', border: 'none' }}
+        <NavLink
+          to="/guidelines"
+          className={({ isActive }) => `rail-item ${isActive ? 'active' : ''}`}
+          title="Clinical Documentation & Guidelines"
         >
           <HelpCircle size={18} />
           <span>Help</span>
-        </button>
+        </NavLink>
 
         <div
           className="user-avatar-mini"

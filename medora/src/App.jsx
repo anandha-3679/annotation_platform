@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard';
 import ProjectPage from './pages/ProjectPage';
 import AnnotationWorkspace from './pages/AnnotationWorkspace';
 import ActiveLearning from './pages/ActiveLearning';
+import Guidelines from './pages/Guidelines';
 import Settings from './pages/Settings';
 
 function ProtectedRoute({ children }) {
@@ -50,6 +51,7 @@ export default function App() {
             <Route path="/projects" element={<ProjectPage />} />
             <Route path="/project/:id" element={<ProjectPage />} />
             <Route path="/active-learning" element={<ActiveLearning />} />
+            <Route path="/guidelines" element={<Guidelines />} />
             <Route path="/settings" element={<Settings />} />
           </Route>
 

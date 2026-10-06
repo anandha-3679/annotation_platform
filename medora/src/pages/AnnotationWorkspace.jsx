@@ -38,6 +38,7 @@ import {
   getProjectImages,
   getAnnotation,
   saveAnnotation,
+  predictImage,
 } from '../services/api';
 
 // Default medical X-ray asset
@@ -58,6 +59,7 @@ export default function AnnotationWorkspace() {
   const [imageRecord, setImageRecord] = useState(null);
   const [currentImageUrl, setCurrentImageUrl] = useState(DEFAULT_XRAY);
   const [isSaving, setIsSaving] = useState(false);
+  const [predictionId, setPredictionId] = useState(null);
 
   // AI Inference State
   const [aiLoading, setAiLoading] = useState(true);
@@ -82,6 +84,18 @@ export default function AnnotationWorkspace() {
 
   // Status message
   const [toastMsg, setToastMsg] = useState('Connecting to Medical Imaging Service...');
+
+  // Helper to normalize findings to { id, label, location, severity, confidence }
+  const normalizeFindings = (rawFindings) => {
+    if (!Array.isArray(rawFindings)) return [];
+    return rawFindings.map((f, idx) => ({
+      id: f.id || `f-${idx}-${Date.now()}`,
+      label: f.label || f.pathology || 'Finding',
+      location: f.location || 'Lung zone',
+      severity: f.severity || 'Moderate',
+      confidence: f.confidence || 0.8,
+    }));
+  };
 
   // Load Real Image & Annotation or Fallback on Mount
   useEffect(() => {
@@ -137,11 +151,14 @@ export default function AnnotationWorkspace() {
                 setAiMaskUrl(existingAnn.mask_url);
               }
               if (existingAnn.findings_json && existingAnn.findings_json.length > 0) {
-                setFindings(existingAnn.findings_json);
+                setFindings(normalizeFindings(existingAnn.findings_json));
               }
               if (existingAnn.dice_score) {
                 setAiConfidence(existingAnn.dice_score);
                 setAiUncertainty(Math.max(0.05, +(1 - existingAnn.dice_score).toFixed(2)));
+              }
+              if (existingAnn.prediction_id) {
+                setPredictionId(existingAnn.prediction_id);
               }
               if (existingAnn.source === 'human_edited' || loadedImage.status === 'done') {
                 setWorkflowStatus('accepted');
@@ -153,15 +170,36 @@ export default function AnnotationWorkspace() {
           } catch (e) {
             console.warn('Could not check existing annotation:', e);
           }
+
+          // If no saved annotation exists, call FastAPI POST /predict
+          try {
+            setToastMsg('Running AI model inference on radiograph...');
+            const aiPred = await predictImage(loadedImage.id);
+            if (!mounted) return;
+            if (aiPred) {
+              setPredictionId(aiPred.id);
+              if (aiPred.mask_url) {
+                setAiMaskUrl(aiPred.mask_url);
+              }
+              setAiConfidence(aiPred.confidence || 0.85);
+              setAiUncertainty(aiPred.uncertainty_score || 0.15);
+              setFindings(normalizeFindings(aiPred.findings));
+              setToastMsg(`AI Model ${aiPred.model_version || 'v2.1'} segmentation loaded ✦`);
+              setAiLoading(false);
+              return;
+            }
+          } catch (e) {
+            console.warn('POST /predict failed, falling back to local synthetic generator:', e);
+          }
         }
 
-        // If no saved annotation was found, run mock AI prediction to give initial masks & findings
+        // Fallback to local mock AI if completely disconnected
         const pred = await getMockAIPrediction(650, 650);
         if (!mounted) return;
         setAiMaskUrl(pred.maskDataUrl);
         setAiConfidence(pred.confidence);
         setAiUncertainty(pred.uncertainty);
-        setFindings(pred.findings);
+        setFindings(normalizeFindings(pred.findings));
         setToastMsg('AI Segmentation & Clinical Findings loaded ✦');
       } catch (err) {
         console.error('Error initializing workspace:', err);
@@ -198,6 +236,7 @@ export default function AnnotationWorkspace() {
           findings_json: findings,
           source: source,
           dice_score: aiConfidence,
+          prediction_id: predictionId || undefined,
         };
 
         const result = await saveAnnotation(payload);

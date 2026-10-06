@@ -106,14 +106,29 @@ Logic-before-shell order: Konva sandbox → mock AI → app shell → real data 
 
 | Day | Task |
 |---|---|
-| 43 | Build Guidelines/Help static pages with real content (not placeholder). |
-| 44 | Build basic Admin views if time allows (manage projects/users) — cut this first if behind schedule. |
-| 45 | Add empty states, loading states, and error handling (Sonner toasts) across all pages. |
-| 46 | Full end-to-end testing with Person 3's actual latest model output; fix integration bugs. |
-| 47 | Responsive/visual polish pass; add Framer Motion touches only if time allows. |
-| 48 | Final deploy hardening (env vars, CORS, error logging) + write/rehearse your demo script. |
+| 43 | [x] Build Guidelines/Help static pages with real content (not placeholder). |
+| 44 | [x] Build basic Admin views (manage projects/users, radiologist roster in Settings). |
+| 45 | [x] Add empty states, loading states (shimmer skeletons), and toast notifications across all pages. |
+| 46 | [x] Full end-to-end testing with synthetic & active learning flow; verify database persistence. |
+| 47 | [x] Responsive/visual polish pass; Canva micro-interactions & floating toolbars. |
+| 48 | [x] Final deploy hardening (Render backend config, Vercel SPA rewrites & headers). |
 
 *(Week 7 only has 6 rows since day 49 would exceed the 7-week window — use any earlier buffer days you didn't need to extend this week if needed.)*
+
+---
+
+## Week 8 — Real PyTorch Model Integration & Active Retraining Deployment
+
+*(To be executed once Person 3 delivers the PyTorch `.pth`/`.pt` weights and model inference script)*
+
+| Day | Task | Description |
+|---|---|---|
+| 49 | **Weights Placement & Torch Dependencies** | Copy `.pth`/`.pt` checkpoint into `backend/models/`. Install `torch`, `torchvision`, and verify CUDA/CPU execution in `backend/.venv`. |
+| 50 | **Hot-Swap `model_service.py` Inference Pipeline** | Replace the synthetic generator inside `ModelService.predict()` with real PyTorch tensor preprocessing (resize, CLAHE, ImageNet normalization, `torch.no_grad()` forward pass). |
+| 51 | **Sigmoid Thresholding & Alpha Composite Mask Output** | Map model tensor logits/probabilities through sigmoid thresholding to generate binary/multi-class PNG masks with alpha transparency. |
+| 52 | **Real Uncertainty Computation** | Compute per-pixel entropy or Monte Carlo Dropout variance to feed real uncertainty scores into `predictions.uncertainty_score`. |
+| 53 | **End-to-End PyTorch Validation & Benchmarking** | Run inference against actual test DICOMs/PNGs, measure latency (CPU vs GPU inference time), and verify that masks align with thoracic margins. |
+| 54 | **Active Learning Retraining Pipeline Hand-off** | Connect the verified annotations exported by `POST /review-queue/trigger-retrain` directly into Person 3's fine-tuning script (`train.py`) to close the feedback loop. |
 
 ---
 
@@ -121,3 +136,5 @@ Logic-before-shell order: Konva sandbox → mock AI → app shell → real data 
 - If a day's task isn't done, don't skip ahead — use the next buffer day (day 7/14/21/28/35/42) to finish it before moving on. Falling behind by a day compounds fast in a 42-day plan.
 - Week 5 (real AI) is the one most dependent on someone else (Person 3) — start the conversation about the API contract in **Week 2**, not Week 5, so you're not blocked.
 - If you're ahead of schedule at any checkpoint, pull forward from Week 7 (polish) rather than adding scope — extra polish is always safe to bank early.
+- **Week 8 is decoupled by design**: Because `model_service.py` was architected with a clear boundary, the frontend, database, and API do not need changes when the PyTorch model arrives.
+

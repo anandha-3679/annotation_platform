@@ -233,3 +233,64 @@ export async function saveAnnotation(payload) {
     mask_url: ann.mask_url ? resolveMediaUrl(ann.mask_url) : null,
   };
 }
+
+// ── AI Predictions ────────────────────────────────────────────────────────────
+export async function predictImage(imageId, forceRecompute = false) {
+  const res = await fetch(`${API_BASE}/predict`, {
+    method: 'POST',
+    headers: getAuthHeaders(true),
+    body: JSON.stringify({
+      image_id: imageId,
+      force_recompute: forceRecompute,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'AI Prediction failed');
+  }
+  const pred = await res.json();
+  return {
+    ...pred,
+    mask_url: pred.mask_url ? resolveMediaUrl(pred.mask_url) : null,
+  };
+}
+
+// ── Active Learning & Review Queue ───────────────────────────────────────────
+export async function getReviewQueue(projectId) {
+  const res = await fetch(`${API_BASE}/review-queue/${projectId}`, {
+    headers: getAuthHeaders(false),
+  });
+  if (!res.ok) throw new Error('Failed to fetch review queue');
+  const data = await res.json();
+  return {
+    ...data,
+    items: (data.items || []).map((item) => ({
+      ...item,
+      url: resolveMediaUrl(item.url),
+    })),
+  };
+}
+
+export async function triggerRetrain(payload = {}) {
+  const res = await fetch(`${API_BASE}/review-queue/trigger-retrain`, {
+    method: 'POST',
+    headers: getAuthHeaders(true),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to trigger model retraining');
+  }
+  return await res.json();
+}
+
+export async function getProgress(projectId) {
+  const res = await fetch(`${API_BASE}/progress/${projectId}`, {
+    headers: getAuthHeaders(false),
+  });
+  if (!res.ok) throw new Error('Failed to fetch progress metrics');
+  return await res.json();
+}
+
+

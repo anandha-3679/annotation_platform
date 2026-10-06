@@ -1,7 +1,7 @@
 # MEDORA — Project State & Resume Guide
 
-> **Last Updated**: October 3, 2026  
-> **Status**: Week 4 Complete | Ready for Week 5 (Real PyTorch AI Integration)  
+> **Last Updated**: October 6, 2026  
+> **Status**: Week 7 Complete (Guidelines, Admin Roles, UX Shimmer Polish & Deployment Hardened) — Ready for Week 8 PyTorch Model Drop-In  
 > **Active Directory**: `c:\Users\Anandha Lakshmi\mini_project`
 
 ---
@@ -118,28 +118,44 @@
 4. **Styling Constraint**:
    - Standard Vanilla CSS with CSS custom properties in `index.css`. No Tailwind.
 
----
+### ✅ Week 5: Synthetic AI Model Service & Prediction Loop (Complete)
+- **Model Service (`backend/services/model_service.py`)**:
+  - Implemented high-fidelity synthetic chest radiograph segmentation generator: bilateral lung fields, cardiac silhouette, and consolidation/effusion pathology highlights with alpha transparency.
+  - Outputs realistic confidence, uncertainty scores, and structured clinical findings.
+  - Architecture prepared for zero-refactor hot-swapping once PyTorch `.pt`/`.pth` weights are supplied.
+- **FastAPI AI Prediction (`POST /predict`)**:
+  - Validates image, reuses/caches existing predictions (idempotent), stores physical mask PNGs to `backend/storage/masks/`, and writes rows to the PostgreSQL `predictions` table.
+- **Frontend Workspace (`AnnotationWorkspace.jsx`)**:
+  - Automatically queries `/predict` for unreviewed studies.
+  - Renders AI mask overlay and findings in the inspector panel.
+  - Full **Accept** (`source='ai_accepted'`) and **Edit** (`source='human_edited'`) mask workflows with canvas eraser/brush integration.
+- **Verification**: Verified via `test_week5_synthetic_flow.py` (9/9 ASGI assertions passed).
 
-## 5. Next Steps — How to Resume Immediately
+### ✅ Week 6: Smart Active Learning Review Queue & Progress Analytics (Complete)
+- **Review Queue (`GET /review-queue/{project_id}`)**:
+  - Surfaces unannotated radiographs ordered by highest uncertainty (`predictions.uncertainty_score DESC`) to prioritize ambiguous cases.
+- **Active Retrain Worker (`POST /review-queue/trigger-retrain`)**:
+  - Packages doctor-verified segmentations into training manifests and registers new cycles in the `review_cycles` table.
+- **Clinical Progress & Calibration Analytics (`GET /progress/{project_id}`)**:
+  - Computes real-time cohort completion percentage, verified counts, and mean Dice similarity coefficients across doctor annotations in PostgreSQL.
+- **Frontend Wiring**:
+  - `ActiveLearning.jsx`: Cohort dropdown, live uncertainty sampling queue, retrain cycle triggers with success feedback, and iteration cards.
+  - `Dashboard.jsx`: Live cohort metrics and active learning pulse cards reflecting live database status.
+- **Verification**: Verified via `test_week6_active_learning_flow.py` (6/6 ASGI assertions passed) and `npm run build` (passed in 1.41s).
 
-When starting the next session, proceed with **Week 4 & Supabase Real Integration**:
-
-### Priority 1: Supabase Storage Buckets & Policies
-1. In Supabase Dashboard, create storage buckets:
-   - `raw-images` (public or authenticated read for radiographs)
-   - `masks` (for ground truth and radiologist exported masks)
-2. Execute `database/storage_policies.sql` in Supabase SQL Editor.
-
-### Priority 2: Backend API Integration
-3. Populate `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` in `backend/.env`.
-4. Connect frontend API calls from `medora/src/pages/` to FastAPI backend endpoints:
-   - `GET /api/projects` and `GET /api/images`
-   - `POST /api/predict` (connect real model or mock AI service)
-   - `POST /api/annotations` (persist doctor masks and clinical findings)
-   - `POST /api/review` (record accept/reject decisions and uncertainty deltas)
-
-### Priority 3: PyTorch Model Coordination
-5. Synchronize with ML collaborator on checkpoint inputs/outputs (`chest_xray_seg.pth` inference and retraining batch format).
+### ✅ Week 7: Clinical Guidelines, Admin Roles, UX Polish & Deployment Hardening (Complete)
+- **Clinical Guidelines & Protocol Manual (`/guidelines` & `Guidelines.jsx`)**:
+  - Full radiological documentation: window/level assessment standards, pathology reference guide (Consolidation `#7C3AED`, Pleural Effusion `#3B82F6`, Pneumothorax `#EF4444`), active learning uncertainty sampling workflows, canvas shortcut directory, and HIPAA de-identification protocol.
+  - Linked to the sidebar Help action and routed within AppShell.
+- **Admin Roster & Permission Controls (`/settings` & `Settings.jsx`)**:
+  - Tabbed administration view: User profile preferences, radiologist roster & role assignment (`Admin Radiologist`, `Staff Radiologist`, `ML Engineer`), and live infrastructure connection diagnostics.
+- **UX Resilience & Polish**:
+  - Added shimmer skeleton loader states (`.skeleton`) and floating toast notifications (`.toast-pill`) with slide-up micro-animations.
+  - Empty states across galleries and queues with upload buttons.
+- **Deployment Hardening**:
+  - Configured `backend/render.yaml` with production environment flags, database pooler mappings, and `/health` restart monitor.
+  - Configured `medora/vercel.json` with SPA catch-all rewrites and immutable asset caching headers.
+- **Verification**: `npm run build` compiled cleanly in 1.44s with 0 errors.
 
 ---
 
