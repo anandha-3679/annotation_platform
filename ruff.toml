@@ -1,8 +1,7 @@
-﻿# Quiet Ruff configuration in errors-only mode
+# Ruff configuration
 line-length = 100
 target-version = "py312"
 
 [lint]
 select = ["E", "F"]
 ignore = ["E501"]
-output-format = "concise"
