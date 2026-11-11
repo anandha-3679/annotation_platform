@@ -174,11 +174,15 @@ export default function ActiveLearning() {
             Current Mean Dice Score
           </div>
           <div style={{ fontSize: '32px', fontWeight: '800', color: 'var(--primary-700)', marginTop: '6px' }}>
-            {progressStats?.mean_dice_score?.toFixed(3) || '0.892'}
+            {progressStats?.mean_dice_score != null ? progressStats.mean_dice_score.toFixed(3) : 'N/A'}
           </div>
-          <div style={{ fontSize: '12px', color: 'var(--color-success)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+          <div style={{ fontSize: '12px', color: progressStats?.mean_dice_score != null ? 'var(--color-success)' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
             <TrendingUp size={14} />
-            <span>+15.0% accuracy increase since baseline</span>
+            <span>
+              {progressStats?.mean_dice_score != null
+                ? 'Ground-truth radiologist concordance'
+                : 'Awaiting doctor verified annotations'}
+            </span>
           </div>
         </div>
 
@@ -187,10 +191,10 @@ export default function ActiveLearning() {
             Verified Corrected Masks
           </div>
           <div style={{ fontSize: '32px', fontWeight: '800', color: 'var(--text-primary)', marginTop: '6px' }}>
-            {progressStats ? `${progressStats.annotated_images} / ${progressStats.total_images}` : '32 / 35'}
+            {progressStats ? `${progressStats.annotated_images} / ${progressStats.total_images}` : '0 / 0'}
           </div>
           <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-            {progressStats ? `${progressStats.pending_images} cases pending doctor review in active batch` : '3 cases pending doctor review'}
+            {progressStats ? `${progressStats.pending_images} cases pending doctor review in active batch` : '0 cases pending doctor review'}
           </div>
         </div>
 
@@ -199,10 +203,10 @@ export default function ActiveLearning() {
             Model Architecture
           </div>
           <div style={{ fontSize: '20px', fontWeight: '700', color: 'var(--text-primary)', marginTop: '10px' }}>
-            U-Net + ResNet-50
+            U-Net (unet-v1)
           </div>
           <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-            Weights: PyTorch checkpoint • `chest_xray_seg.pth`
+            Render Deep Learning Service • 5-Class Multi-Label Segmentation
           </div>
         </div>
       </div>
