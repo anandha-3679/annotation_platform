@@ -83,10 +83,10 @@ export default function TopBar({ onUploadClick }) {
           className="btn btn-secondary"
           onClick={() => navigate('/active-learning')}
           style={{ gap: '6px', fontSize: '12px', padding: '6px 12px' }}
-          title="Active Learning Model Status"
+          title="Active Deep Learning Feedback Loop"
         >
           <Sparkles size={14} color="var(--primary-600)" />
-          <span>Active Loop: Iteration 4</span>
+          <span>Active DL Loop</span>
         </button>
 
         <button

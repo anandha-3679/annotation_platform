@@ -110,8 +110,8 @@ export default function Dashboard() {
     },
     {
       id: 'active-learning',
-      title: 'Active ML Loop',
-      subtitle: 'Model Iteration 4',
+      title: 'Active DL Loop',
+      subtitle: 'Feedback Pipeline',
       icon: Sparkles,
       gradient: 'linear-gradient(135deg, #059669 0%, #34d399 100%)',
       action: () => navigate('/active-learning'),
@@ -254,16 +254,16 @@ export default function Dashboard() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '16px', fontWeight: '700' }}>
-                Active Learning Cycle #{activeProgress?.active_learning_cycles_completed || 4} Active
+                Active Learning Cycle #{activeProgress?.active_learning_cycles_completed ? activeProgress.active_learning_cycles_completed : 1} (Baseline)
               </span>
               <span className="badge badge-success">
-                Model Dice {activeProgress?.mean_dice_score?.toFixed(3) || '0.892'} (+15%)
+                Model Dice {activeProgress?.mean_dice_score != null ? activeProgress.mean_dice_score.toFixed(3) : 'N/A'}
               </span>
             </div>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>
               {activeProgress ? activeProgress.annotated_images : totalAnnotated} of{' '}
-              {activeProgress ? activeProgress.total_images : totalStudies} radiographs reviewed by radiologists.
-              Corrected segmentations directly improve next fine-tuning weights.
+              {activeProgress ? activeProgress.total_images : totalStudies} radiographs verified by specialists.
+              Verified corrections directly feed into next deep learning fine-tuning weights.
             </p>
           </div>
         </div>
@@ -316,14 +316,11 @@ export default function Dashboard() {
                   className="study-card"
                   onClick={() => navigate(`/project/${proj.id}`)}
                 >
-                  <div className="study-card-thumb">
-                    <img
-                      src="/sample-xray.png"
-                      alt={proj.name}
-                      onError={(e) => {
-                        e.target.src = 'https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&w=400&q=80';
-                      }}
-                    />
+                  <div className="study-card-thumb" style={{ background: '#1e293b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ color: '#94a3b8', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                      <Layers size={28} color="#64748b" />
+                      <span style={{ fontSize: '11px', fontWeight: 600 }}>COHORT ARCHIVE</span>
+                    </div>
                     <div className="study-card-tag" style={{ background: '#7c3aed' }}>
                       {proj.status.toUpperCase()}
                     </div>

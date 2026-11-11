@@ -139,7 +139,7 @@ export default function ProjectPanel({ isCollapsed, onToggle }) {
             <Sparkles size={16} color="var(--primary-600)" />
             <span>Active Learning Pool</span>
             <span className="panel-badge" style={{ background: 'var(--primary-100)', color: 'var(--primary-700)' }}>
-              {cohorts.length * 4}
+              {pendingCount}
             </span>
           </NavLink>
 

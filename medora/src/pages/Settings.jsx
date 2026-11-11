@@ -23,7 +23,7 @@ export default function Settings() {
   const [teamMembers, setTeamMembers] = useState([
     { id: '1', name: 'Dr. Anandha Lakshmi', email: 'radiologist@medora.health', role: 'Admin Radiologist', status: 'Active' },
     { id: '2', name: 'Dr. Marcus Vance', email: 'm.vance@apexhealth.org', role: 'Staff Radiologist', status: 'Active' },
-    { id: '3', name: 'Elena Rostova', email: 'elena@ml-research.ai', role: 'ML Engineer', status: 'Active' },
+    { id: '3', name: 'Elena Rostova', email: 'elena@dl-research.ai', role: 'Deep Learning Engineer', status: 'Active' },
   ]);
 
   const [toastMsg, setToastMsg] = useState('');

@@ -31,7 +31,6 @@ import {
 } from 'lucide-react';
 import { AnnotationCanvas } from '../components/canvas/AnnotationCanvas';
 import { TOOLS, COLOR_PALETTES } from '../components/canvas/constants';
-import { getMockAIPrediction } from '../services/mockAI';
 import {
   getImageDetail,
   getProjects,
@@ -39,10 +38,8 @@ import {
   getAnnotation,
   saveAnnotation,
   predictImage,
+  warmupAI,
 } from '../services/api';
-
-// Default medical X-ray asset
-const DEFAULT_XRAY = 'https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&w=1000&q=85';
 
 export default function AnnotationWorkspace() {
   const navigate = useNavigate();
@@ -57,15 +54,15 @@ export default function AnnotationWorkspace() {
 
   // Backend image & save state
   const [imageRecord, setImageRecord] = useState(null);
-  const [currentImageUrl, setCurrentImageUrl] = useState(DEFAULT_XRAY);
+  const [currentImageUrl, setCurrentImageUrl] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [predictionId, setPredictionId] = useState(null);
 
   // AI Inference State
-  const [aiLoading, setAiLoading] = useState(true);
+  const [aiLoading, setAiLoading] = useState(false);
   const [aiMaskUrl, setAiMaskUrl] = useState(null);
-  const [aiConfidence, setAiConfidence] = useState(0.81);
-  const [aiUncertainty, setAiUncertainty] = useState(0.19);
+  const [aiConfidence, setAiConfidence] = useState(0.0);
+  const [aiUncertainty, setAiUncertainty] = useState(0.0);
   const [showAIMask, setShowAIMask] = useState(true);
   const [aiMaskOpacity, setAiMaskOpacity] = useState(0.7);
   const [workflowStatus, setWorkflowStatus] = useState('predicted'); // 'predicted' | 'editing' | 'accepted'
@@ -171,9 +168,10 @@ export default function AnnotationWorkspace() {
             console.warn('Could not check existing annotation:', e);
           }
 
-          // If no saved annotation exists, call FastAPI POST /predict
+          // If no saved annotation exists, call FastAPI POST /predict (Real DL U-Net Model)
           try {
-            setToastMsg('Running AI model inference on radiograph...');
+            setAiLoading(true);
+            setToastMsg('Running Deep Learning inference on radiograph...');
             const aiPred = await predictImage(loadedImage.id);
             if (!mounted) return;
             if (aiPred) {
@@ -181,34 +179,30 @@ export default function AnnotationWorkspace() {
               if (aiPred.mask_url) {
                 setAiMaskUrl(aiPred.mask_url);
               }
-              setAiConfidence(aiPred.confidence || 0.85);
-              setAiUncertainty(aiPred.uncertainty_score || 0.15);
+              setAiConfidence(aiPred.confidence || 0.0);
+              setAiUncertainty(aiPred.uncertainty_score || 0.0);
               setFindings(normalizeFindings(aiPred.findings));
-              setToastMsg(`AI Model ${aiPred.model_version || 'v2.1'} segmentation loaded ✦`);
+              setToastMsg(`Deep Learning Model ${aiPred.model_version || 'U-Net'} prediction loaded ✦`);
               setAiLoading(false);
               return;
             }
           } catch (e) {
-            console.warn('POST /predict failed, falling back to local synthetic generator:', e);
+            console.error('Deep Learning POST /predict failed:', e);
+            setToastMsg(`DL Inference Error: ${e.message || 'Model unreachable (502/503)'}`);
           }
+        } else {
+          setToastMsg('No study selected. Please select a radiograph from the cohort library ✦');
         }
-
-        // Fallback to local mock AI if completely disconnected
-        const pred = await getMockAIPrediction(650, 650);
-        if (!mounted) return;
-        setAiMaskUrl(pred.maskDataUrl);
-        setAiConfidence(pred.confidence);
-        setAiUncertainty(pred.uncertainty);
-        setFindings(normalizeFindings(pred.findings));
-        setToastMsg('AI Segmentation & Clinical Findings loaded ✦');
       } catch (err) {
         console.error('Error initializing workspace:', err);
-        setToastMsg('Ready for manual annotation ✦');
+        setToastMsg(`Workspace error: ${err.message || 'Failed to load radiograph'}`);
       } finally {
         if (mounted) setAiLoading(false);
       }
     }
 
+    // Trigger non-blocking warm-up ping for Render DL service
+    warmupAI().catch(() => {});
     loadWorkspaceData();
 
     return () => {
@@ -414,7 +408,7 @@ export default function AnnotationWorkspace() {
               style={{ fontSize: '13px', padding: '6px 14px' }}
             >
               <Sparkles size={14} />
-              <span>Feed into Active ML</span>
+              <span>Feed into Active DL</span>
             </button>
           )}
 
@@ -580,10 +574,10 @@ export default function AnnotationWorkspace() {
                 <>
                   <div style={{ background: 'var(--primary-50)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--primary-200)' }}>
                     <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--primary-900)' }}>
-                      U-Net ResNet-50 v2.1
+                      Deep Learning: U-Net (unet-v1)
                     </div>
                     <div style={{ fontSize: '11px', color: 'var(--primary-700)', marginTop: '2px' }}>
-                      Active Learning Calibration: 940 Training Studies
+                      Render Multi-label Lesion Segmentation • 5 Pathological Classes
                     </div>
                   </div>
 
@@ -663,10 +657,10 @@ export default function AnnotationWorkspace() {
           {aiLoading ? (
             <div style={{ textAlign: 'center', color: '#ffffff' }}>
               <div className="spinner" style={{ width: '36px', height: '36px', border: '3px solid rgba(255,255,255,0.2)', borderTopColor: 'var(--primary-500)', borderRadius: '50%', margin: '0 auto 16px', animation: 'spin 1s linear infinite' }} />
-              <div style={{ fontSize: '15px', fontWeight: 600 }}>Running Neural Segmentation Model...</div>
-              <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>Inference on PyTorch U-Net checkpoint</div>
+              <div style={{ fontSize: '15px', fontWeight: 600 }}>Running Deep Learning Segmentation Model...</div>
+              <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>Inference on Render U-Net (unet-v1)</div>
             </div>
-          ) : (
+          ) : currentImageUrl ? (
             <AnnotationCanvas
               imageUrl={currentImageUrl}
               tool={activeTool}
@@ -681,6 +675,23 @@ export default function AnnotationWorkspace() {
               stageWidth={650}
               stageHeight={650}
             />
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', gap: '14px', padding: '40px', textAlign: 'center' }}>
+              <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Layers size={32} color="#94a3b8" />
+              </div>
+              <div style={{ fontSize: '16px', fontWeight: 700, color: '#ffffff' }}>No Radiograph Loaded</div>
+              <div style={{ fontSize: '13px', maxWidth: '360px', lineHeight: 1.5, color: '#94a3b8' }}>
+                Select a chest radiograph from your project cohorts or upload a new DICOM study to view annotations and run Deep Learning inference.
+              </div>
+              <button
+                className="btn btn-primary"
+                onClick={() => navigate('/dashboard')}
+                style={{ marginTop: '10px' }}
+              >
+                Browse Cohorts
+              </button>
+            </div>
           )}
 
           {/* Canva Floating Bottom Pill Toolbar */}

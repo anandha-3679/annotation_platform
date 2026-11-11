@@ -24,7 +24,7 @@ export default function Sidebar() {
     { label: 'Home', icon: LayoutDashboard, path: '/dashboard' },
     { label: 'Projects', icon: FolderKanban, path: '/projects' },
     { label: 'Annotate', icon: PenTool, path: '/annotate' },
-    { label: 'Active ML', icon: BrainCircuit, path: '/active-learning' },
+    { label: 'Active DL', icon: BrainCircuit, path: '/active-learning' },
     { label: 'Settings', icon: Settings, path: '/settings' },
   ];
 

@@ -26,103 +26,28 @@ export function resolveMediaUrl(path) {
   return `${API_BASE}${clean}`;
 }
 
-export const FALLBACK_COHORTS = [
-  {
-    id: 'proj-1',
-    name: 'Chest PA — ICU Cohort',
-    description: 'Acute respiratory distress syndrome & pleural fluid monitoring',
-    status: 'active',
-    total_images: 48,
-    annotated_images: 32,
-  },
-  {
-    id: 'proj-2',
-    name: 'Cardiomegaly Pilot',
-    description: 'Cardiothoracic ratio boundary measurement and heart silhouette trial',
-    status: 'active',
-    total_images: 120,
-    annotated_images: 85,
-  },
-  {
-    id: 'proj-3',
-    name: 'Pneumothorax Urgents',
-    description: 'Tension pneumothorax line segmentation and urgent pleural air detection',
-    status: 'active',
-    total_images: 14,
-    annotated_images: 9,
-  },
-  {
-    id: 'proj-4',
-    name: 'Normal Baseline Scans',
-    description: 'Reference chest radiographs with clear pulmonary parenchymal margins',
-    status: 'active',
-    total_images: 85,
-    annotated_images: 85,
-  },
-];
-
-export const FALLBACK_IMAGES = [
-  {
-    id: 'img-101',
-    project_id: 'proj-1',
-    url: '/sample-xray.png',
-    original_name: 'PA_CHEST_ICU_CASE_01.png',
-    width_px: 1024,
-    height_px: 1024,
-    status: 'in_review',
-    confidence: 88.4,
-    has_annotation: false,
-  },
-  {
-    id: 'img-102',
-    project_id: 'proj-1',
-    url: '/sample-xray.png',
-    original_name: 'PA_CHEST_ICU_CASE_02.png',
-    width_px: 1024,
-    height_px: 1024,
-    status: 'pending',
-    confidence: 72.1,
-    has_annotation: false,
-  },
-  {
-    id: 'img-103',
-    project_id: 'proj-1',
-    url: '/sample-xray.png',
-    original_name: 'PA_CHEST_ICU_CASE_03.png',
-    width_px: 1024,
-    height_px: 1024,
-    status: 'done',
-    confidence: 94.0,
-    has_annotation: true,
-  },
-];
-
 // ── Projects / Cohorts ────────────────────────────────────────────────────────
 export async function getProjects() {
-  try {
-    const res = await fetch(`${API_BASE}/projects`, {
-      headers: getAuthHeaders(false),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) return data;
-    }
-  } catch (err) {
-    console.warn('Backend API unreachable, using clinical cohort fallback:', err);
+  const res = await fetch(`${API_BASE}/projects`, {
+    headers: getAuthHeaders(false),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to fetch projects');
   }
-  return FALLBACK_COHORTS;
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
 }
 
 export async function getProject(projectId) {
-  try {
-    const res = await fetch(`${API_BASE}/projects/${projectId}`, {
-      headers: getAuthHeaders(false),
-    });
-    if (res.ok) return await res.json();
-  } catch (err) {
-    console.warn('Could not fetch project details:', err);
+  const res = await fetch(`${API_BASE}/projects/${projectId}`, {
+    headers: getAuthHeaders(false),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to fetch project details');
   }
-  return FALLBACK_COHORTS.find((p) => p.id === projectId) || FALLBACK_COHORTS[0];
+  return await res.json();
 }
 
 export async function createProject(payload) {
@@ -149,23 +74,18 @@ export async function deleteProject(projectId) {
 
 // ── Images ────────────────────────────────────────────────────────────────────
 export async function getProjectImages(projectId) {
-  try {
-    const res = await fetch(`${API_BASE}/images/${projectId}`, {
-      headers: getAuthHeaders(false),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) {
-        return data.map((img) => ({
-          ...img,
-          url: resolveMediaUrl(img.url),
-        }));
-      }
-    }
-  } catch (err) {
-    console.warn('Could not fetch project images, using fallback radiographs:', err);
+  const res = await fetch(`${API_BASE}/images/${projectId}`, {
+    headers: getAuthHeaders(false),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to fetch project radiographs');
   }
-  return FALLBACK_IMAGES;
+  const data = await res.json();
+  return (Array.isArray(data) ? data : []).map((img) => ({
+    ...img,
+    url: resolveMediaUrl(img.url),
+  }));
 }
 
 export async function getImageDetail(imageId) {
@@ -234,7 +154,7 @@ export async function saveAnnotation(payload) {
   };
 }
 
-// ── AI Predictions ────────────────────────────────────────────────────────────
+// ── Deep Learning AI Predictions & Warm-up ────────────────────────────────────
 export async function predictImage(imageId, forceRecompute = false) {
   const res = await fetch(`${API_BASE}/predict`, {
     method: 'POST',
@@ -247,13 +167,38 @@ export async function predictImage(imageId, forceRecompute = false) {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || 'AI Prediction failed');
+    throw new Error(err.detail || 'Deep Learning AI prediction failed');
   }
   const pred = await res.json();
   return {
     ...pred,
     mask_url: pred.mask_url ? resolveMediaUrl(pred.mask_url) : null,
+    findings: (pred.findings || []).map((f) => ({
+      ...f,
+      mask_url: f.mask_url ? resolveMediaUrl(f.mask_url) : null,
+    })),
   };
+}
+
+export async function warmupAI() {
+  try {
+    const res = await fetch(`${API_BASE}/predict/warmup`, {
+      method: 'POST',
+      headers: getAuthHeaders(true),
+    });
+    if (res.ok) return await res.json();
+  } catch (err) {
+    console.warn('DL warmup request failed:', err);
+  }
+  return { dl_service_up: false };
+}
+
+export async function getModelInfo() {
+  const res = await fetch(`${API_BASE}/predict/model-info`, {
+    headers: getAuthHeaders(false),
+  });
+  if (!res.ok) throw new Error('Failed to fetch DL model info');
+  return await res.json();
 }
 
 // ── Active Learning & Review Queue ───────────────────────────────────────────

@@ -129,7 +129,7 @@ export default function Signup() {
                 >
                   <option value="Radiologist">Radiologist</option>
                   <option value="Resident">Radiology Resident</option>
-                  <option value="ML Engineer">ML Engineer</option>
+                  <option value="Deep Learning Engineer">Deep Learning Engineer</option>
                   <option value="Admin">Clinical Admin</option>
                 </select>
               </div>

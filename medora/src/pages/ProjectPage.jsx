@@ -300,7 +300,7 @@ export default function ProjectPage() {
                     alt={img.original_name}
                     style={{ objectFit: 'contain' }}
                     onError={(e) => {
-                      e.target.src = '/sample-xray.png';
+                      e.target.style.display = 'none';
                     }}
                   />
                   <div

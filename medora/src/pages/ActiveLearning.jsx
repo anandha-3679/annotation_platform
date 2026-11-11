@@ -27,13 +27,6 @@ export default function ActiveLearning() {
   const [queueItems, setQueueItems] = useState([]);
   const [progressStats, setProgressStats] = useState(null);
 
-  const iterations = [
-    { version: 'v1.0 (Baseline)', date: 'Aug 15, 2026', images: 500, diceScore: 0.742, status: 'Superseded' },
-    { version: 'v1.1 (Active Loop 1)', date: 'Sep 01, 2026', images: 620, diceScore: 0.789, status: 'Superseded' },
-    { version: 'v2.0 (Active Loop 2)', date: 'Sep 18, 2026', images: 780, diceScore: 0.841, status: 'Superseded' },
-    { version: 'v2.1 (Current Production)', date: 'Oct 01, 2026', images: 940, diceScore: 0.892, status: 'Active' },
-  ];
-
   // Load cohorts on mount
   useEffect(() => {
     let mounted = true;
@@ -150,7 +143,7 @@ export default function ActiveLearning() {
             style={{ padding: '10px 20px', fontSize: '14px' }}
           >
             {retraining ? <Loader2 size={16} className="spin" /> : <RefreshCw size={16} />}
-            <span>{retraining ? 'Queuing Training Workers...' : 'Export Batch to ML Model'}</span>
+            <span>{retraining ? 'Queuing Training Workers...' : 'Export Batch to DL Model'}</span>
           </button>
         </div>
       </div>
@@ -181,11 +174,15 @@ export default function ActiveLearning() {
             Current Mean Dice Score
           </div>
           <div style={{ fontSize: '32px', fontWeight: '800', color: 'var(--primary-700)', marginTop: '6px' }}>
-            {progressStats?.mean_dice_score?.toFixed(3) || '0.892'}
+            {progressStats?.mean_dice_score != null ? progressStats.mean_dice_score.toFixed(3) : 'N/A'}
           </div>
-          <div style={{ fontSize: '12px', color: 'var(--color-success)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+          <div style={{ fontSize: '12px', color: progressStats?.mean_dice_score != null ? 'var(--color-success)' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
             <TrendingUp size={14} />
-            <span>+15.0% accuracy increase since baseline</span>
+            <span>
+              {progressStats?.mean_dice_score != null
+                ? 'Ground truth radiologist concordance'
+                : 'Awaiting doctor verified annotations'}
+            </span>
           </div>
         </div>
 
@@ -194,10 +191,10 @@ export default function ActiveLearning() {
             Verified Corrected Masks
           </div>
           <div style={{ fontSize: '32px', fontWeight: '800', color: 'var(--text-primary)', marginTop: '6px' }}>
-            {progressStats ? `${progressStats.annotated_images} / ${progressStats.total_images}` : '32 / 35'}
+            {progressStats ? `${progressStats.annotated_images} / ${progressStats.total_images}` : '0 / 0'}
           </div>
           <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-            {progressStats ? `${progressStats.pending_images} cases pending doctor review in active batch` : '3 cases pending doctor review'}
+            {progressStats ? `${progressStats.pending_images} cases pending doctor review in active batch` : 'No cases pending doctor review'}
           </div>
         </div>
 
@@ -206,10 +203,10 @@ export default function ActiveLearning() {
             Model Architecture
           </div>
           <div style={{ fontSize: '20px', fontWeight: '700', color: 'var(--text-primary)', marginTop: '10px' }}>
-            U-Net + ResNet-50
+            U-Net (unet-v1)
           </div>
           <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-            Weights: PyTorch checkpoint • `chest_xray_seg.pth`
+            Render Deep Learning Service • 5-Class Multi-Label Segmentation
           </div>
         </div>
       </div>
@@ -309,30 +306,25 @@ export default function ActiveLearning() {
 
       {/* Historical Iterations Progression */}
       <div style={{ background: '#ffffff', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)', padding: '24px' }}>
-        <h3 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '16px' }}>Active Learning Iteration Progression</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
-          {iterations.map((it, idx) => (
-            <div
-              key={idx}
-              style={{
-                padding: '16px',
-                borderRadius: 'var(--radius-sm)',
-                border: it.status === 'Active' ? '2px solid var(--primary-500)' : '1px solid var(--border-light)',
-                background: it.status === 'Active' ? 'var(--primary-50)' : 'transparent',
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '13px', fontWeight: 700 }}>{it.version}</span>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{it.date}</span>
-              </div>
-              <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--primary-700)', margin: '8px 0 4px' }}>
-                {it.diceScore.toFixed(3)} Dice
-              </div>
-              <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                Trained on {it.images} verified radiographs
-              </div>
-            </div>
-          ))}
+        <h3 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '8px' }}>Active Learning Iteration Progression</h3>
+        <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
+          Historical fine-tuning cycles triggered by doctor-verified segmentation masks.
+        </p>
+        <div style={{
+          padding: '32px 20px',
+          textAlign: 'center',
+          background: 'var(--bg-app)',
+          borderRadius: 'var(--radius-sm)',
+          border: '1px dashed var(--border-light)',
+          color: 'var(--text-secondary)'
+        }}>
+          <BrainCircuit size={32} style={{ margin: '0 auto 8px', color: 'var(--primary-500)', opacity: 0.8 }} />
+          <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>
+            Baseline Deep Learning Model (unet-v1) Active
+          </div>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', maxWidth: '480px', margin: '4px auto 0' }}>
+            No fine-tuning cycles completed yet. As you correct and approve DICOM radiographs, export batches above to trigger subsequent model iterations.
+          </div>
         </div>
       </div>
     </div>
