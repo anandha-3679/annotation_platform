@@ -17,6 +17,7 @@ from core.auth import (
     get_user_db,
 )
 from models.tables import Project, Image, Prediction, User
+from services.remote_model import remote_model_client
 from sqlalchemy import select, func
 from fastapi_users.exceptions import UserAlreadyExists
 from api.projects import router as projects_router
@@ -60,87 +61,6 @@ async def seed_demo_user():
         logger.warning("Could not seed demo user: %s", e)
 
 
-async def seed_initial_cohorts():
-    """Ensure starter projects and sample radiographs exist for clinical workflow."""
-    try:
-        async with async_session_maker() as session:
-            # Check if any projects exist
-            proj_count_res = await session.execute(select(func.count(Project.id)))
-            count = proj_count_res.scalar() or 0
-            if count > 0:
-                return
-
-            # Find demo user
-            user_res = await session.execute(select(User).where(User.email == "radiologist@medora.health"))
-            user = user_res.scalars().first()
-            if not user:
-                return
-
-            # Create starter projects
-            p1 = Project(
-                name="Chest PA — ICU Cohort",
-                description="Acute respiratory distress syndrome & pleural fluid monitoring",
-                status="active",
-                owner_id=user.id,
-            )
-            p2 = Project(
-                name="Cardiomegaly Pilot",
-                description="Cardiothoracic ratio boundary measurement and heart silhouette trial",
-                status="active",
-                owner_id=user.id,
-            )
-            p3 = Project(
-                name="Pneumothorax Urgents",
-                description="Tension pneumothorax line segmentation and urgent pleural air detection",
-                status="active",
-                owner_id=user.id,
-            )
-            session.add_all([p1, p2, p3])
-            await session.commit()
-            await session.refresh(p1)
-
-            # Add starter sample images pointing to raw-images/sample-xray.png
-            img1 = Image(
-                project_id=p1.id,
-                storage_path="raw-images/sample-xray.png",
-                original_name="PA_CHEST_ICU_CASE_01.png",
-                width_px=1024,
-                height_px=1024,
-                status="in_review",
-                uploaded_by=user.id,
-            )
-            img2 = Image(
-                project_id=p1.id,
-                storage_path="raw-images/sample-xray.png",
-                original_name="PA_CHEST_ICU_CASE_02.png",
-                width_px=1024,
-                height_px=1024,
-                status="pending",
-                uploaded_by=user.id,
-            )
-            session.add_all([img1, img2])
-            await session.commit()
-            await session.refresh(img1)
-
-            # Add starter prediction for img1
-            pred = Prediction(
-                image_id=img1.id,
-                mask_storage_path="",
-                confidence=0.884,
-                uncertainty_score=0.116,
-                findings_json=[
-                    {"pathology": "Cardiomegaly", "confidence": 0.88, "location": "Cardiac silhouette"},
-                    {"pathology": "Pleural Effusion", "confidence": 0.74, "location": "Bilateral costophrenic angles"},
-                ],
-                model_version="chexnet-seg-v1.4",
-            )
-            session.add(pred)
-            await session.commit()
-            logger.info("✅ Seeded initial clinical cohorts and sample chest radiographs.")
-    except Exception as e:
-        logger.warning("Could not seed initial cohorts: %s", e)
-
-
 # ── Lifespan (startup / shutdown) ─────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -150,9 +70,20 @@ async def lifespan(app: FastAPI):
     if db_ok:
         logger.info("✅ Database connection: OK")
         await seed_demo_user()
-        await seed_initial_cohorts()
     else:
         logger.warning("⚠️  Database connection FAILED — check DATABASE_URL in .env")
+
+    # Deep Learning U-Net service warm-up check (non-blocking)
+    if remote_model_client.enabled:
+        try:
+            info = await remote_model_client.fetch_model_info()
+            if info:
+                logger.info("✅ Remote DL Service connected: %s (%s)", info.get("model_name"), info.get("architecture"))
+            else:
+                logger.info("ℹ️  Remote DL Service booting or warming up on Render")
+        except Exception as e:
+            logger.warning("Could not contact remote DL Service at startup: %s", e)
+
     yield
     # Shutdown
     logger.info("MEDORA API shutting down")
@@ -223,13 +154,20 @@ async def health():
     Liveness check. Returns:
       - status: "ok" if everything is healthy
       - db: "connected" | "error"
+      - dl_service: "connected" | "unreachable" | "disabled"
       - environment: current environment name
-    Frontend pings this on startup to confirm the backend is reachable.
+    Frontend pings this on startup to confirm the backend and DL pipeline are reachable.
     """
     db_ok = check_db_connection()
+    dl_status = "disabled"
+    if remote_model_client.enabled:
+        is_dl_up = await remote_model_client.health(timeout=4.0)
+        dl_status = "connected" if is_dl_up else "unreachable"
+
     return {
         "status": "ok" if db_ok else "degraded",
         "db": "connected" if db_ok else "error",
+        "dl_service": dl_status,
         "environment": settings.environment,
         "version": "0.1.0",
     }

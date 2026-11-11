@@ -245,3 +245,39 @@ async def predict_image(
         model_version=new_prediction.model_version,
         created_at=new_prediction.created_at,
     )
+
+
+@router.get("/model-info")
+async def get_model_info():
+    """Returns remote Deep Learning model metadata (architecture, classes, thresholds)."""
+    if remote_model_client.enabled:
+        try:
+            info = await remote_model_client.fetch_model_info()
+            if info:
+                return info
+        except Exception as e:
+            logger.warning("Could not fetch model info from remote service: %s", e)
+    return {
+        "model_name": "unet-v1",
+        "architecture": "U-Net",
+        "input_channels": 1,
+        "num_classes": 5,
+        "classes": [
+            "Aortic enlargement",
+            "Cardiomegaly",
+            "Pleural thickening",
+            "Pulmonary fibrosis",
+            "Lung Opacity",
+        ],
+        "remote_service": remote_model_client.base_url,
+    }
+
+
+@router.post("/warmup")
+async def warmup_model():
+    """Pre-heats the remote Deep Learning service to prevent cold-start latency."""
+    if remote_model_client.enabled:
+        healthy = await remote_model_client.health_check()
+        return {"dl_service_up": healthy, "url": remote_model_client.base_url}
+    return {"dl_service_up": False, "reason": "remote_model_disabled"}
+
