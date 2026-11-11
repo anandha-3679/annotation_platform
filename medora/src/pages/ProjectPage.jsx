@@ -46,13 +46,18 @@ export default function ProjectPage() {
     getProjects()
       .then((projs) => {
         if (!mounted) return;
-        setProjects(projs);
-        if (projs.length > 0) {
+        setProjects(projs || []);
+        if (projs && projs.length > 0) {
           const selected = id ? projs.find((p) => p.id === id) : projs[0];
           setActiveProject(selected || projs[0]);
+        } else {
+          setLoading(false);
         }
       })
-      .catch((err) => console.warn('Could not load projects:', err));
+      .catch((err) => {
+        console.warn('Could not load projects:', err);
+        if (mounted) setLoading(false);
+      });
 
     return () => {
       mounted = false;
@@ -61,11 +66,14 @@ export default function ProjectPage() {
 
   // Load images whenever activeProject changes
   const loadImages = async () => {
-    if (!activeProject) return;
+    if (!activeProject) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const data = await getProjectImages(activeProject.id);
-      setImages(data);
+      setImages(data || []);
     } catch (err) {
       console.warn('Could not load images for project:', err);
     } finally {

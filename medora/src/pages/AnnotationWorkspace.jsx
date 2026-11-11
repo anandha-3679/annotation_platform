@@ -11,7 +11,7 @@ import {
   CheckCircle,
   Sparkles,
   Sliders,
-  Layers as LayersIcon,
+  Layers,
   Brain,
   History,
   Palette,
@@ -451,7 +451,7 @@ export default function AnnotationWorkspace() {
             onClick={() => setActiveDrawer(activeDrawer === 'layers' ? null : 'layers')}
             title="Layers & Masks"
           >
-            <LayersIcon size={18} />
+            <Layers size={18} />
             <span>Layers</span>
           </button>
 
