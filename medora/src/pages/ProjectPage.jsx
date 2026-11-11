@@ -144,10 +144,10 @@ export default function ProjectPage() {
         <div style={{ display: 'flex', gap: '10px' }}>
           <label className="btn btn-secondary" style={{ cursor: uploading ? 'wait' : 'pointer' }}>
             <UploadCloud size={16} />
-            <span>{uploading ? 'Uploading...' : 'Upload Radiograph'}</span>
+            <span>{uploading ? 'Uploading...' : 'Upload DICOM'}</span>
             <input
               type="file"
-              accept="image/png,image/jpeg,image/webp,.dcm"
+              accept=".dcm,.dicom,application/dicom"
               style={{ display: 'none' }}
               disabled={uploading || !activeProject}
               onChange={handleFileUpload}
@@ -269,14 +269,14 @@ export default function ProjectPage() {
           <FileImage size={48} color="var(--primary-300)" style={{ margin: '0 auto 12px' }} />
           <h3 style={{ fontSize: '16px', fontWeight: '700' }}>No radiographs found</h3>
           <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
-            Upload chest X-ray images (PNG, JPEG, DICOM) to begin reviewing AI masks.
+            Upload chest X-ray DICOM studies (.dcm, .dicom) to begin reviewing AI masks.
           </p>
           <label className="btn btn-gradient" style={{ marginTop: '16px', cursor: 'pointer', display: 'inline-flex' }}>
             <UploadCloud size={16} />
-            <span>Upload Radiograph</span>
+            <span>Upload DICOM</span>
             <input
               type="file"
-              accept="image/png,image/jpeg,image/webp,.dcm"
+              accept=".dcm,.dicom,application/dicom"
               style={{ display: 'none' }}
               disabled={uploading}
               onChange={handleFileUpload}

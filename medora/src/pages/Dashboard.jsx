@@ -95,7 +95,7 @@ export default function Dashboard() {
     {
       id: 'upload',
       title: 'Upload Study',
-      subtitle: 'DICOM / PNG / JPG',
+      subtitle: 'DICOM (.dcm)',
       icon: UploadCloud,
       gradient: 'linear-gradient(135deg, #2563eb 0%, #38bdf8 100%)',
       action: () => setShowUploadModal(true),
@@ -413,7 +413,7 @@ export default function Dashboard() {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Select Radiograph File (DICOM, PNG, JPEG)</label>
+                  <label className="form-label">Select Radiograph File (DICOM Only)</label>
                   <div
                     style={{
                       border: '2px dashed var(--border-light)',
@@ -427,15 +427,15 @@ export default function Dashboard() {
                   >
                     <UploadCloud size={36} color="var(--primary-600)" style={{ margin: '0 auto 8px' }} />
                     <div style={{ fontSize: '14px', fontWeight: '700' }}>
-                      {selectedFile ? selectedFile.name : 'Click to select chest X-ray'}
+                      {selectedFile ? selectedFile.name : 'Click to select DICOM file'}
                     </div>
                     <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                      {selectedFile ? `${Math.round(selectedFile.size / 1024)} KB` : 'Supports PNG, JPG, DCM up to 50MB'}
+                      {selectedFile ? `${Math.round(selectedFile.size / 1024)} KB` : 'Strict DICOM ingestion (.dcm, .dicom) up to 50MB'}
                     </div>
                     <input
                       id="dashboard-file-input"
                       type="file"
-                      accept="image/png,image/jpeg,image/webp,.dcm"
+                      accept=".dcm,.dicom,application/dicom"
                       style={{ display: 'none' }}
                       onChange={(e) => {
                         if (e.target.files?.[0]) {
