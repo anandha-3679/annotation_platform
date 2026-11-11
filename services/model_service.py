@@ -21,6 +21,7 @@ class PredictionOutput:
     model_version: str = "medora-unet-v2.1"
     width: int = 1024
     height: int = 1024
+    class_masks: dict[str, bytes] = field(default_factory=dict)
 
 
 def generate_synthetic_segmentation_mask(

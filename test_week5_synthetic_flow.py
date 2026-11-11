@@ -15,8 +15,15 @@ Verifies:
 import asyncio
 import io
 import os
+
+# Ensure synthetic fallback generator is tested deterministically
+os.environ["USE_REMOTE_MODEL"] = "false"
+
 import httpx
 from PIL import Image, ImageDraw
+from core.config import settings
+settings.use_remote_model = False
+
 from main import app, lifespan
 
 async def run_week5_test():

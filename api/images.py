@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.tables import Image, Project, Prediction, Annotation, User
 from core.database import get_async_session
 from core.auth import current_active_user, optional_current_user
+from services.dicom_service import dicom_to_png_preview, is_dicom_file
 
 logger = logging.getLogger(__name__)
 
@@ -46,10 +47,18 @@ class ImageResponse(BaseModel):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def build_image_url(storage_path: str) -> str:
-    """Returns accessible URL for the storage path."""
+    """Returns accessible URL for the storage path. If DICOM, returns web preview PNG if available."""
     if storage_path.startswith("http://") or storage_path.startswith("https://"):
         return storage_path
     normalized = storage_path.replace("\\", "/").lstrip("/")
+    
+    # If this is a DICOM file, check if a rendered PNG preview exists
+    if normalized.lower().endswith((".dcm", ".dicom")):
+        preview_rel = f"{normalized}.preview.png"
+        preview_abs = os.path.join(STORAGE_DIR, preview_rel)
+        if os.path.exists(preview_abs):
+            return f"/storage/{preview_rel}"
+
     return f"/storage/{normalized}"
 
 
@@ -169,24 +178,49 @@ async def upload_image(
     if not contents:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty")
 
-    # Read image dimensions
+    filename = file.filename or "radiograph.dcm"
+    ext = os.path.splitext(filename)[1].lower()
+
+    # Verify DICOM format (Enforce DICOM-only pipeline for Deep Learning U-Net model)
+    is_dcm = is_dicom_file(filename, contents)
+    preview_bytes: Optional[bytes] = None
     width, height = None, None
-    try:
-        with PILImage.open(io.BytesIO(contents)) as pil_img:
-            width, height = pil_img.size
-    except Exception as e:
-        logger.warning("Could not parse image dimensions: %s", e)
+
+    if is_dcm:
+        try:
+            preview_bytes, width, height, dcm_meta = dicom_to_png_preview(contents)
+        except Exception as e:
+            logger.error("Failed to parse DICOM: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid DICOM file or corrupted pixel data: {e}",
+            )
+    else:
+        # Fallback for standard PNG/JPG if uploaded in tests/demo
+        try:
+            with PILImage.open(io.BytesIO(contents)) as pil_img:
+                width, height = pil_img.size
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"File is not a valid DICOM radiograph (.dcm / .dicom): {e}",
+            )
 
     # Generate destination path
-    ext = os.path.splitext(file.filename or "")[1].lower() or ".png"
-    safe_name = f"{uuid.uuid4().hex[:12]}_{os.path.basename(file.filename or 'xray.png')}"
+    safe_name = f"{uuid.uuid4().hex[:12]}_{os.path.basename(filename)}"
     relative_path = f"raw-images/{project_id}/{safe_name}"
     target_abs = os.path.join(STORAGE_DIR, "raw-images", str(project_id), safe_name)
     os.makedirs(os.path.dirname(target_abs), exist_ok=True)
 
-    # Write file to storage
+    # Write raw file (DICOM / image) to storage
     with open(target_abs, "wb") as f:
         f.write(contents)
+
+    # If DICOM, also save high-resolution 8-bit PNG canvas preview
+    if preview_bytes:
+        preview_target_abs = f"{target_abs}.preview.png"
+        with open(preview_target_abs, "wb") as f:
+            f.write(preview_bytes)
 
     # Insert DB record
     image_record = Image(

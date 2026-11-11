@@ -17,6 +17,11 @@ import io
 import os
 import httpx
 from PIL import Image, ImageDraw
+from core.config import settings
+
+# In-process deterministic integration suite uses synthetic model
+settings.use_remote_model = False
+
 from main import app, lifespan
 
 async def run_master_test_suite():

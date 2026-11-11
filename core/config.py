@@ -21,6 +21,17 @@ class Settings(BaseSettings):
     # ── AI Model ──────────────────────────────────────────────────────────────
     model_path: str = "./models/chest_xray_seg.pth"
 
+    # Remote U-Net ML service (Render). API key is server-side only — never expose to frontend.
+    ml_api_url: str = "https://chest-xray-ai-annotation.onrender.com"
+    ml_api_key: str = ""
+    x_api_key: str = ""
+    ml_api_timeout: float = 120.0
+    use_remote_model: bool = True
+
+    @property
+    def effective_ml_api_key(self) -> str:
+        return self.ml_api_key or self.x_api_key
+
     # ── App & Auth ────────────────────────────────────────────────────────────
     environment: str = "development"
     allowed_origins: str = "http://localhost:5173"
@@ -35,6 +46,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",
     )
 
 

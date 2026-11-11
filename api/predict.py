@@ -6,19 +6,23 @@ and segmentation mask to PostgreSQL / local storage, and returns structured find
 
 from datetime import datetime
 import logging
+import mimetypes
 import os
 from typing import List, Optional
 import uuid
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.auth import optional_current_user
+from core.config import settings
 from core.database import get_async_session
 from models.tables import Image, Prediction, User
 from services.model_service import model_service
+from services.remote_model import RemoteModelError, adapt_unet_response, remote_model_client
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +44,13 @@ class FindingItem(BaseModel):
     severity: Optional[str] = None
     confidence: float
     description: Optional[str] = None
+    # Per-class fields populated by the remote U-Net model
+    detected: Optional[bool] = None
+    threshold: Optional[float] = None
+    uncertainty: Optional[float] = None
+    color: Optional[str] = None
+    mask_path: Optional[str] = None
+    mask_url: Optional[str] = None
 
 
 class PredictResponse(BaseModel):
@@ -64,6 +75,41 @@ def build_mask_url(storage_path: Optional[str]) -> str:
         return storage_path
     normalized = storage_path.replace("\\", "/").lstrip("/")
     return f"/storage/{normalized}"
+
+
+async def load_image_bytes(storage_path: Optional[str]) -> Optional[bytes]:
+    """Reads raw image bytes from local storage or a remote (e.g. Supabase) URL."""
+    if not storage_path:
+        return None
+    if storage_path.startswith("http://") or storage_path.startswith("https://"):
+        try:
+            async with httpx.AsyncClient(timeout=60) as client:
+                r = await client.get(storage_path)
+                r.raise_for_status()
+                return r.content
+        except httpx.HTTPError as exc:
+            logger.error("Failed to download image %s: %s", storage_path, exc)
+            return None
+    abs_path = os.path.join(STORAGE_DIR, storage_path.replace("\\", "/").lstrip("/"))
+    if not os.path.exists(abs_path):
+        return None
+    with open(abs_path, "rb") as f:
+        return f.read()
+
+
+@router.get("/model-info", tags=["predict"])
+async def model_info():
+    """Returns cached metadata (class names, thresholds) of the remote ML model."""
+    info = remote_model_client.model_info or await remote_model_client.fetch_model_info()
+    if not info:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Model info unavailable")
+    return info
+
+
+@router.post("/warmup", tags=["predict"])
+async def warmup():
+    """Pings the remote ML service so a cold Render instance starts booting."""
+    return {"ml_service_up": await remote_model_client.health(timeout=10.0)}
 
 
 # ── Endpoint ──────────────────────────────────────────────────────────────────
@@ -115,22 +161,41 @@ async def predict_image(
                     created_at=existing_pred.created_at,
                 )
 
-    # 3. Read image dimensions or bytes if present
+    # 3. Read image dimensions
     width = image.width_px or 1024
     height = image.height_px or 1024
 
     # Deterministic seed based on image UUID int for reproducible predictions per study
     seed = int(image.id.int % 10000000)
 
-    # 4. Run model inference via ModelService
-    prediction_result = model_service.predict(
-        image_bytes=None,
-        width=width,
-        height=height,
-        seed=seed,
-    )
+    # 4. Run model inference: remote U-Net service, or synthetic fallback
+    prediction_result = None
+    if remote_model_client.enabled:
+        image_bytes = await load_image_bytes(image.storage_path)
+        if image_bytes is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Image file not found in storage",
+            )
+        filename = image.original_name or os.path.basename(image.storage_path) or "image.png"
+        content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+        try:
+            raw = await remote_model_client.predict(image_bytes, filename, content_type)
+            prediction_result = adapt_unet_response(raw, image.width_px, image.height_px)
+        except RemoteModelError as exc:
+            logger.error("Remote inference failed for image %s: %s", image.id, exc)
+            # Never substitute synthetic output for a real model failure.
+            raise HTTPException(status_code=exc.status_code, detail=str(exc))
 
-    # 5. Persist mask PNG to storage/masks/
+    if prediction_result is None:
+        prediction_result = model_service.predict(
+            image_bytes=None,
+            width=width,
+            height=height,
+            seed=seed,
+        )
+
+    # 5. Persist mask PNG(s) to storage/masks/
     timestamp_str = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     mask_filename = f"pred_{image.id}_{timestamp_str}.png"
     relative_mask_path = f"masks/{mask_filename}"
@@ -139,6 +204,17 @@ async def predict_image(
 
     with open(abs_mask_path, "wb") as f:
         f.write(prediction_result.mask_png_bytes)
+
+    # Per-class masks (remote model only); paths recorded inside findings_json
+    for finding in prediction_result.findings:
+        class_png = prediction_result.class_masks.get(finding.get("id", ""))
+        if not class_png:
+            continue
+        rel = f"masks/pred_{image.id}_{timestamp_str}_{finding['id']}.png"
+        with open(os.path.join(STORAGE_DIR, rel), "wb") as f:
+            f.write(class_png)
+        finding["mask_path"] = rel
+        finding["mask_url"] = build_mask_url(rel)
 
     # 6. Save prediction row to PostgreSQL
     new_prediction = Prediction(

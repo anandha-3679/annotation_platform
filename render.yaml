@@ -22,6 +22,12 @@ services:
         sync: false
       - key: MODEL_PATH
         value: ./models/chest_xray_seg.pth
+      - key: ML_API_URL
+        value: https://chest-xray-ai-annotation.onrender.com
+      - key: ML_API_KEY
+        sync: false            # secret — set manually in Render dashboard
+      - key: USE_REMOTE_MODEL
+        value: "true"
       - key: ALLOWED_ORIGINS
         sync: false            # set to your Vercel URL e.g. https://chestannotate.vercel.app
 
