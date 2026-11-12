@@ -13,6 +13,7 @@ import {
   getReviewQueue,
   triggerRetrain,
   getProgress,
+  getReviewCycles,
 } from '../services/api';
 
 export default function ActiveLearning() {
@@ -26,6 +27,7 @@ export default function ActiveLearning() {
   const [selectedProjectId, setSelectedProjectId] = useState(null);
   const [queueItems, setQueueItems] = useState([]);
   const [progressStats, setProgressStats] = useState(null);
+  const [reviewCycles, setReviewCycles] = useState([]);
 
   // Load cohorts on mount
   useEffect(() => {
@@ -51,41 +53,40 @@ export default function ActiveLearning() {
     };
   }, []);
 
-  // When selected cohort changes, fetch review queue & progress
-  useEffect(() => {
+  // When selected cohort changes, fetch review queue, progress & historical cycles
+  const loadCohortDetails = async () => {
     if (!selectedProjectId) return;
-    let mounted = true;
+    try {
+      const [queueRes, statsRes, cyclesRes] = await Promise.allSettled([
+        getReviewQueue(selectedProjectId),
+        getProgress(selectedProjectId),
+        getReviewCycles(selectedProjectId),
+      ]);
 
-    async function loadCohortDetails() {
-      try {
-        const [queueRes, statsRes] = await Promise.allSettled([
-          getReviewQueue(selectedProjectId),
-          getProgress(selectedProjectId),
-        ]);
-
-        if (!mounted) return;
-
-        if (queueRes.status === 'fulfilled' && queueRes.value?.items) {
-          setQueueItems(queueRes.value.items);
-        } else {
-          setQueueItems([]);
-        }
-
-        if (statsRes.status === 'fulfilled' && statsRes.value) {
-          setProgressStats(statsRes.value);
-        }
-      } catch (err) {
-        console.warn('Could not load live review queue or progress:', err);
+      if (queueRes.status === 'fulfilled' && queueRes.value?.items) {
+        setQueueItems(queueRes.value.items);
+      } else {
+        setQueueItems([]);
       }
-    }
 
+      if (statsRes.status === 'fulfilled' && statsRes.value) {
+        setProgressStats(statsRes.value);
+      }
+
+      if (cyclesRes.status === 'fulfilled' && Array.isArray(cyclesRes.value)) {
+        setReviewCycles(cyclesRes.value);
+      }
+    } catch (err) {
+      console.warn('Could not load live review queue or progress:', err);
+    }
+  };
+
+  useEffect(() => {
     loadCohortDetails();
-    return () => {
-      mounted = false;
-    };
   }, [selectedProjectId]);
 
   const handleTriggerRetrain = async () => {
+    if (!selectedProjectId || retraining) return;
     setRetraining(true);
     try {
       const res = await triggerRetrain({
@@ -93,6 +94,7 @@ export default function ActiveLearning() {
         notes: 'Retraining triggered from radiologist active learning portal',
       });
       setRetrainSuccess(res?.message || 'Retraining cycle queued successfully ✦');
+      await loadCohortDetails();
       setTimeout(() => setRetrainSuccess(null), 6000);
     } catch (err) {
       console.error('Failed to trigger retrain:', err);
@@ -306,26 +308,78 @@ export default function ActiveLearning() {
 
       {/* Historical Iterations Progression */}
       <div style={{ background: '#ffffff', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)', padding: '24px' }}>
-        <h3 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '8px' }}>Active Learning Iteration Progression</h3>
-        <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
-          Historical fine-tuning cycles triggered by doctor-verified segmentation masks.
-        </p>
-        <div style={{
-          padding: '32px 20px',
-          textAlign: 'center',
-          background: 'var(--bg-app)',
-          borderRadius: 'var(--radius-sm)',
-          border: '1px dashed var(--border-light)',
-          color: 'var(--text-secondary)'
-        }}>
-          <BrainCircuit size={32} style={{ margin: '0 auto 8px', color: 'var(--primary-500)', opacity: 0.8 }} />
-          <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>
-            Baseline Deep Learning Model (unet-v1) Active
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+          <div>
+            <h3 style={{ fontSize: '16px', fontWeight: '700' }}>Active Learning Iteration Progression</h3>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+              Historical fine-tuning cycles triggered by doctor-verified segmentation masks.
+            </p>
           </div>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', maxWidth: '480px', margin: '4px auto 0' }}>
-            No fine-tuning cycles completed yet. As you correct and approve DICOM radiographs, export batches above to trigger subsequent model iterations.
-          </div>
+          <span className="panel-badge" style={{ background: 'var(--primary-100)', color: 'var(--primary-700)', padding: '4px 10px', fontSize: '12px' }}>
+            {reviewCycles.length} Calibrated Cycles
+          </span>
         </div>
+
+        {reviewCycles.length === 0 ? (
+          <div style={{
+            padding: '32px 20px',
+            textAlign: 'center',
+            background: 'var(--bg-app)',
+            borderRadius: 'var(--radius-sm)',
+            border: '1px dashed var(--border-light)',
+            color: 'var(--text-secondary)'
+          }}>
+            <BrainCircuit size={32} style={{ margin: '0 auto 8px', color: 'var(--primary-500)', opacity: 0.8 }} />
+            <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>
+              Baseline Deep Learning Model (unet-v1) Active
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', maxWidth: '480px', margin: '4px auto 0' }}>
+              No fine-tuning cycles completed yet. As you correct and approve DICOM radiographs, click "Export Batch to DL Model" or "Submit to Retraining Queue" to trigger subsequent iterations.
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px', marginTop: '16px' }}>
+            <div style={{ padding: '16px', background: 'var(--bg-app)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>v1.0 (Baseline)</span>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Pre-trained</span>
+              </div>
+              <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)', marginTop: '8px' }}>
+                U-Net Baseline
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                5 Pathological Classes • Render DL
+              </div>
+            </div>
+
+            {reviewCycles.map((cycle, idx) => (
+              <div
+                key={cycle.id || idx}
+                style={{
+                  padding: '16px',
+                  background: idx === reviewCycles.length - 1 ? 'rgba(124, 58, 237, 0.04)' : '#ffffff',
+                  borderRadius: 'var(--radius-sm)',
+                  border: idx === reviewCycles.length - 1 ? '1.5px solid var(--primary-500)' : '1px solid var(--border-light)',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--primary-700)' }}>
+                    v1.{cycle.cycle_number} (Active Loop #{cycle.cycle_number})
+                  </span>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                    {new Date(cycle.started_at).toLocaleDateString()}
+                  </span>
+                </div>
+                <div style={{ fontSize: '22px', fontWeight: 800, color: 'var(--primary-800)', marginTop: '6px' }}>
+                  {progressStats?.mean_dice_score != null ? `${progressStats.mean_dice_score.toFixed(3)} Dice` : 'Active'}
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--color-success)', fontWeight: 600, marginTop: '4px' }}>
+                  ✦ Cycle Queued • {progressStats?.annotated_images || 1} verified radiographs
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

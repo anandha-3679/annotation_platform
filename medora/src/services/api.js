@@ -238,4 +238,13 @@ export async function getProgress(projectId) {
   return await res.json();
 }
 
+export async function getReviewCycles(projectId) {
+  const res = await fetch(`${API_BASE}/review-queue/cycles/${projectId}`, {
+    headers: getAuthHeaders(false),
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
 

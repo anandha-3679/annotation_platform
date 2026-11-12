@@ -39,6 +39,7 @@ import {
   saveAnnotation,
   predictImage,
   warmupAI,
+  triggerRetrain,
 } from '../services/api';
 
 export default function AnnotationWorkspace() {
@@ -56,6 +57,7 @@ export default function AnnotationWorkspace() {
   const [imageRecord, setImageRecord] = useState(null);
   const [currentImageUrl, setCurrentImageUrl] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPushingRetrain, setIsPushingRetrain] = useState(false);
   const [predictionId, setPredictionId] = useState(null);
 
   // AI Inference State
@@ -260,12 +262,44 @@ export default function AnnotationWorkspace() {
     setTimeout(() => setToastMsg(''), 4000);
   };
 
-  const handleFeedActiveLearning = () => {
-    setToastMsg('Transmitting corrected mask to PyTorch Active Learning Worker...');
-    setTimeout(() => {
-      setToastMsg('Success: Mask integrated into Model Retrain Batch #5 ✦');
-      setTimeout(() => setToastMsg(''), 4000);
-    }, 1500);
+  const handleFeedActiveLearning = async () => {
+    if (isPushingRetrain || isSaving) return;
+    setIsPushingRetrain(true);
+    setToastMsg('Saving verified mask and transmitting to Active DL queue...');
+
+    try {
+      // 1. Ensure human-verified mask & annotation are saved to PostgreSQL
+      const maskDataUrl = canvasControls.current?.getMaskDataUrl?.() || aiMaskUrl;
+      if (imageRecord?.id) {
+        const payload = {
+          image_id: imageRecord.id,
+          mask_data_url: maskDataUrl || undefined,
+          findings_json: findings,
+          source: 'human_edited',
+          dice_score: aiConfidence,
+          prediction_id: predictionId || undefined,
+        };
+        const saved = await saveAnnotation(payload);
+        if (saved?.mask_url) {
+          setAiMaskUrl(saved.mask_url);
+        }
+        setWorkflowStatus('accepted');
+      }
+
+      // 2. Trigger Active DL model fine-tuning cycle in backend
+      const res = await triggerRetrain({
+        project_id: imageRecord?.project_id,
+        notes: `Radiologist verified mask for ${imageRecord?.original_name || imageRecord?.id}`,
+      });
+
+      setToastMsg(`✦ Active DL Retrain ${res?.message || 'Cycle queued successfully!'} ✦`);
+    } catch (err) {
+      console.error('Failed to transmit to Active DL:', err);
+      setToastMsg(`Retrain queue error: ${err.message || 'Server error'}`);
+    } finally {
+      setIsPushingRetrain(false);
+      setTimeout(() => setToastMsg(''), 6000);
+    }
   };
 
   const handleAddFinding = () => {
@@ -871,10 +905,11 @@ export default function AnnotationWorkspace() {
             <button
               className="btn btn-secondary"
               onClick={handleFeedActiveLearning}
+              disabled={isPushingRetrain || isSaving}
               style={{ width: '100%', padding: '8px', fontSize: '12px' }}
             >
-              <Sparkles size={14} color="var(--primary-600)" />
-              <span>Submit to Retraining Queue</span>
+              {isPushingRetrain ? <Loader2 size={14} className="spin" /> : <Sparkles size={14} color="var(--primary-600)" />}
+              <span>{isPushingRetrain ? 'Transmitting to Active DL...' : 'Submit to Retraining Queue'}</span>
             </button>
           </div>
         </aside>
