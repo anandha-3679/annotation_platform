@@ -59,6 +59,17 @@ class RetrainResponse(BaseModel):
     manifest_summary: dict[str, Any]
 
 
+class ReviewCycleResponse(BaseModel):
+    id: uuid.UUID
+    project_id: uuid.UUID
+    cycle_number: int
+    started_at: datetime
+    completed_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
 def resolve_image_url(storage_path: Optional[str]) -> str:
     if not storage_path:
         return "/sample-xray.png"
@@ -181,3 +192,19 @@ async def trigger_retrain_batch(
             "created_at": datetime.utcnow().isoformat(),
         },
     )
+
+
+@router.get("/cycles/{project_id}", response_model=List[ReviewCycleResponse])
+async def list_review_cycles(
+    project_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+    current_user: Optional[User] = Depends(optional_current_user),
+):
+    """Returns all active learning retraining cycles for a project."""
+    stmt = (
+        select(ReviewCycle)
+        .where(ReviewCycle.project_id == project_id)
+        .order_by(ReviewCycle.cycle_number.asc())
+    )
+    res = await session.execute(stmt)
+    return res.scalars().all()

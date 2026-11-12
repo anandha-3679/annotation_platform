@@ -21,20 +21,27 @@ class Settings(BaseSettings):
     # ── AI Model ──────────────────────────────────────────────────────────────
     model_path: str = "./models/chest_xray_seg.pth"
 
-    # Remote U-Net ML service (Render). API key is server-side only — never expose to frontend.
+    # Remote U-Net Deep Learning (DL) service (Render). API key is server-side only — never expose to frontend.
+    dl_api_url: str = "https://chest-xray-ai-annotation.onrender.com"
     ml_api_url: str = "https://chest-xray-ai-annotation.onrender.com"
+    dl_api_key: str = ""
     ml_api_key: str = ""
     x_api_key: str = ""
+    dl_api_timeout: float = 120.0
     ml_api_timeout: float = 120.0
     use_remote_model: bool = True
 
     @property
-    def effective_ml_api_key(self) -> str:
-        return self.ml_api_key or self.x_api_key
+    def effective_dl_api_key(self) -> str:
+        return self.dl_api_key or self.ml_api_key or self.x_api_key
+
+    @property
+    def effective_dl_url(self) -> str:
+        return self.dl_api_url or self.ml_api_url
 
     # ── App & Auth ────────────────────────────────────────────────────────────
     environment: str = "development"
-    allowed_origins: str = "http://localhost:5173"
+    allowed_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000"
     jwt_secret: str = "MEDORA_SUPER_SECURE_JWT_SECRET_KEY_CHANGE_IN_PRODUCTION_2026"
 
     @property

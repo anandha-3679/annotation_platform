@@ -1,6 +1,6 @@
-"""services/remote_model.py — Client + adapter for the deployed U-Net ML service (Render).
+"""services/remote_model.py — Client + adapter for the deployed U-Net Deep Learning (DL) service (Render).
 
-The ML service exposes:
+The DL service exposes:
   GET  /health       -> warm-up / liveness
   GET  /model-info   -> model_name, architecture, input_size, class_names, thresholds, device
   POST /predict      -> multipart `file`, header `X-API-Key`; returns per-class masks,
@@ -38,7 +38,7 @@ MASK_ALPHA = 150
 
 
 class RemoteModelError(Exception):
-    """Raised when the remote ML service fails. `status_code` is the HTTP code to return."""
+    """Raised when the remote DL service fails. `status_code` is the HTTP code to return."""
 
     def __init__(self, message: str, status_code: int = 502):
         super().__init__(message)
@@ -157,18 +157,18 @@ def adapt_unet_response(
 
 
 class RemoteModelClient:
-    """Async HTTP client for the deployed ML service."""
+    """Async HTTP client for the deployed DL service."""
 
     def __init__(self) -> None:
         self.model_info: Optional[dict[str, Any]] = None
 
     @property
     def base_url(self) -> str:
-        return settings.ml_api_url.rstrip("/")
+        return settings.effective_dl_url.rstrip("/")
 
     @property
     def enabled(self) -> bool:
-        return bool(settings.use_remote_model and settings.ml_api_url)
+        return bool(settings.use_remote_model and settings.effective_dl_url)
 
     async def health(self, timeout: float = 5.0) -> bool:
         try:
@@ -180,16 +180,17 @@ class RemoteModelClient:
 
     async def fetch_model_info(self) -> Optional[dict[str, Any]]:
         try:
-            async with httpx.AsyncClient(timeout=settings.ml_api_timeout) as client:
+            timeout = settings.dl_api_timeout or settings.ml_api_timeout
+            async with httpx.AsyncClient(timeout=timeout) as client:
                 r = await client.get(f"{self.base_url}/model-info")
                 r.raise_for_status()
                 self.model_info = r.json()
         except httpx.HTTPError as exc:
-            logger.warning("Could not fetch ML /model-info: %s", exc)
+            logger.warning("Could not fetch DL /model-info: %s", exc)
         return self.model_info
 
     async def predict(self, image_bytes: bytes, filename: str, content_type: str) -> dict[str, Any]:
-        api_key = settings.effective_ml_api_key
+        api_key = settings.effective_dl_api_key
         headers = {"X-API-Key": api_key} if api_key else {}
         files = {"file": (filename, image_bytes, content_type)}
         last_exc: Optional[Exception] = None
@@ -197,19 +198,20 @@ class RemoteModelClient:
         # Wake the server up (Render free tier cold start); non-fatal.
         await self.health(timeout=10.0)
 
+        timeout = settings.dl_api_timeout or settings.ml_api_timeout
         for attempt in range(2):
             try:
-                async with httpx.AsyncClient(timeout=settings.ml_api_timeout) as client:
+                async with httpx.AsyncClient(timeout=timeout) as client:
                     r = await client.post(f"{self.base_url}/predict", headers=headers, files=files)
             except httpx.TimeoutException as exc:
                 last_exc = exc
-                logger.warning("ML /predict timed out (attempt %d)", attempt + 1)
+                logger.warning("DL /predict timed out (attempt %d)", attempt + 1)
                 continue
             except httpx.HTTPError as exc:
                 raise RemoteModelError(f"AI service unreachable: {exc}") from exc
 
             if r.status_code in (401, 403):
-                logger.error("ML service rejected API key (HTTP %s). Check ML_API_KEY.", r.status_code)
+                logger.error("DL service rejected API key (HTTP %s). Check DL_API_KEY/ML_API_KEY.", r.status_code)
                 raise RemoteModelError("AI service auth failed", 502)
             if r.status_code == 422:
                 raise RemoteModelError(f"AI service rejected the image: {r.text[:300]}", 400)

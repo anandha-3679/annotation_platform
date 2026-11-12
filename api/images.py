@@ -117,22 +117,31 @@ async def list_images_for_project(
     )
     result = await session.execute(stmt)
     images = result.scalars().all()
+    if not images:
+        return []
+
+    image_ids = [img.id for img in images]
+
+    # Batch fetch latest predictions and annotations to avoid N+1 WAN round-trips
+    pred_stmt = (
+        select(Prediction)
+        .where(Prediction.image_id.in_(image_ids))
+        .order_by(Prediction.created_at.desc())
+    )
+    pred_res = await session.execute(pred_stmt)
+    pred_map = {}
+    for p in pred_res.scalars().all():
+        if p.image_id not in pred_map:
+            pred_map[p.image_id] = p
+
+    ann_stmt = select(Annotation.image_id).where(Annotation.image_id.in_(image_ids)).distinct()
+    ann_res = await session.execute(ann_stmt)
+    ann_set = set(ann_res.scalars().all())
 
     response = []
     for img in images:
-        # Check if prediction exists
-        pred_stmt = (
-            select(Prediction)
-            .where(Prediction.image_id == img.id)
-            .order_by(Prediction.created_at.desc())
-        )
-        pred_res = await session.execute(pred_stmt)
-        pred = pred_res.scalars().first()
-
-        # Check if annotation exists
-        ann_stmt = select(Annotation).where(Annotation.image_id == img.id)
-        ann_res = await session.execute(ann_stmt)
-        has_ann = ann_res.scalars().first() is not None
+        pred = pred_map.get(img.id)
+        has_ann = img.id in ann_set
 
         response.append(
             ImageResponse(

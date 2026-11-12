@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.auth import optional_current_user
 from core.database import get_async_session
-from models.tables import Annotation, Image, Prediction, Project, User
+from models.tables import Annotation, Image, Prediction, Project, ReviewCycle, User
 
 router = APIRouter(prefix="/progress", tags=["progress"])
 
@@ -29,7 +29,7 @@ class CohortProgressResponse(BaseModel):
     annotated_images: int
     pending_images: int
     completion_percentage: float
-    mean_dice_score: float
+    mean_dice_score: Optional[float] = None
     mean_confidence: float
     mean_uncertainty: float
     recent_annotations_count: int
@@ -72,7 +72,7 @@ async def get_progress(
         .where(Image.project_id == project_id, Annotation.dice_score.isnot(None))
     )
     dice_res = await session.execute(dice_stmt)
-    mean_dice = dice_res.scalar() or 0.892
+    mean_dice = dice_res.scalar()
 
     # 4. Confidence & Uncertainty averages
     stats_stmt = (
@@ -83,6 +83,11 @@ async def get_progress(
     stats_res = await session.execute(stats_stmt)
     mean_conf, mean_uncert = stats_res.first() or (0.84, 0.16)
 
+    # 5. Dynamic count of active learning cycles for this cohort
+    cycle_stmt = select(func.count(ReviewCycle.id)).where(ReviewCycle.project_id == project_id)
+    cycle_res = await session.execute(cycle_stmt)
+    cycles_completed = cycle_res.scalar() or 0
+
     return CohortProgressResponse(
         project_id=project_id,
         project_name=project.name,
@@ -90,9 +95,9 @@ async def get_progress(
         annotated_images=annotated_images,
         pending_images=pending_images,
         completion_percentage=completion_pct,
-        mean_dice_score=round(float(mean_dice), 3),
+        mean_dice_score=round(float(mean_dice), 3) if mean_dice is not None else None,
         mean_confidence=round(float(mean_conf or 0.84), 3),
         mean_uncertainty=round(float(mean_uncert or 0.16), 3),
         recent_annotations_count=annotated_images,
-        active_learning_cycles_completed=4,
+        active_learning_cycles_completed=cycles_completed,
     )
