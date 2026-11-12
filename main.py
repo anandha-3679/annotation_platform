@@ -73,9 +73,9 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("⚠️  Database connection FAILED — check DATABASE_URL in .env")
 
-    # Deep Learning U-Net service warm-up check in background (non-blocking)
+    # Deep Learning U-Net service warm-up check (non-blocking)
     if remote_model_client.enabled:
-        async def _ping_remote():
+        async def _check_remote():
             try:
                 info = await remote_model_client.fetch_model_info()
                 if info:
@@ -86,7 +86,7 @@ async def lifespan(app: FastAPI):
                 logger.warning("Could not contact remote DL Service at startup: %s", e)
 
         import asyncio
-        asyncio.create_task(_ping_remote())
+        asyncio.create_task(_check_remote())
 
     yield
     # Shutdown
