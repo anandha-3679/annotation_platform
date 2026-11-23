@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Settings as SettingsIcon,
   Database,
@@ -12,11 +13,13 @@ import {
   UserPlus,
   Trash2,
   Sliders,
+  LogOut,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
 export default function Settings() {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('profile'); // 'profile' | 'admin' | 'services'
 
   // Admin state simulation
@@ -35,11 +38,35 @@ export default function Settings() {
 
   return (
     <div style={{ padding: '32px 40px', maxWidth: '1080px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      <div>
-        <h1 style={{ fontSize: '26px', fontWeight: '800' }}>Platform Settings & Administration</h1>
-        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-          Configure user roles, PACS integration endpoints, and active learning pipeline parameters.
-        </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
+        <div>
+          <h1 style={{ fontSize: '26px', fontWeight: '800' }}>Platform Settings & Administration</h1>
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+            Configure user roles, PACS integration endpoints, and active learning pipeline parameters.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={async () => {
+            await signOut();
+            navigate('/login');
+          }}
+          className="btn btn-secondary"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            color: 'var(--color-danger)',
+            borderColor: '#fecaca',
+            background: 'var(--color-danger-bg)',
+            fontWeight: 600,
+            fontSize: '13px',
+            padding: '9px 16px',
+          }}
+        >
+          <LogOut size={15} />
+          <span>Sign Out</span>
+        </button>
       </div>
 
       {toastMsg && (
