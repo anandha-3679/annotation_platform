@@ -100,10 +100,13 @@ export async function getImageDetail(imageId) {
   };
 }
 
+import { preprocessImageForUpload } from '../utils/preprocessImage';
+
 export async function uploadImage(projectId, file) {
+  const processedFile = await preprocessImageForUpload(file);
   const formData = new FormData();
   formData.append('project_id', projectId);
-  formData.append('file', file);
+  formData.append('file', processedFile);
 
   const res = await fetch(`${API_BASE}/images/upload`, {
     method: 'POST',
